@@ -132,34 +132,34 @@ tab_train, tab_play = st.tabs(["Train", "Play"])
 # ===========================================================================
 
 with tab_train:
-    st.title("Train Agent")
+    # Title row — EXIT top-right
+    t_title_col, t_exit_col = st.columns([5, 1])
+    t_title_col.title("Train Agent")
+    train_exit_btn = t_exit_col.button(
+        "Exit / Stop", key="train_exit", use_container_width=True
+    )
+    if train_exit_btn and st.session_state.training_state is not None:
+        st.session_state.training_state.stop_requested = True
 
-    # Config inputs
-    col_c1, col_c2 = st.columns(2)
-    t_config_path = col_c1.text_input(
+    # Config inputs — stacked full-width
+    t_config_path = st.text_input(
         "Config YAML", value="config/default.yaml", key="t_config"
     )
-    t_continue_from = col_c2.text_input(
-        "Continue from model (.zip, optional)",
+    t_continue_from = st.text_input(
+        "Continue from model (opt, optional)",
         value="models/snake_ppo.zip",
         key="t_continue",
     )
 
-    # Control buttons
-    col_b1, col_b2, col_b3 = st.columns(3)
-    start_btn = col_b1.button("Start Training", disabled=_is_training())
-    stop_btn = col_b2.button("Stop Training", disabled=not _is_training())
-    train_exit_btn = col_b3.button("Exit / Stop", key="train_exit")
-
-    if train_exit_btn and st.session_state.training_state is not None:
-        st.session_state.training_state.stop_requested = True
-
-    if start_btn:
-        _start_training(t_config_path, t_continue_from or None)
-        st.rerun()
-
-    if stop_btn and st.session_state.training_state is not None:
-        st.session_state.training_state.stop_requested = True
+    # Single toggle button: Start Training ↔ Stop Training
+    if _is_training():
+        if st.button("Stop Training", use_container_width=True):
+            if st.session_state.training_state is not None:
+                st.session_state.training_state.stop_requested = True
+    else:
+        if st.button("Start Training", use_container_width=True):
+            _start_training(t_config_path, t_continue_from or None)
+            st.rerun()
 
     # Status + progress
     state: TrainingState | None = st.session_state.training_state
