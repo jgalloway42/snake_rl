@@ -92,7 +92,7 @@ def run_episode(model: PPO) -> tuple[int, int]:
     while not done:
         frame = env.render()
         if frame is not None:
-            frame_placeholder.image(frame, channels="RGB", use_container_width=True)
+            frame_placeholder.image(frame, channels="RGB", width=480)
         action, _ = model.predict(obs, deterministic=True)
         obs, _, terminated, truncated, info = env.step(int(action))
         score_placeholder.markdown(
