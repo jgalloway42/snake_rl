@@ -9,6 +9,7 @@ import threading
 import time
 
 import pandas as pd
+import yaml
 import streamlit as st
 from stable_baselines3 import PPO
 
@@ -173,6 +174,101 @@ with tab_train:
         if st.button("Start Training", use_container_width=True):
             _start_training(t_config_path, t_continue_from or None)
             st.rerun()
+
+    # Config summary — loaded from the YAML path the user entered
+    try:
+        with open(t_config_path, encoding="utf-8") as _f:
+            _cfg = yaml.safe_load(_f)
+        with st.expander("Config", expanded=False):
+            _r = _cfg.get("reward", {})
+            _p = _cfg.get("ppo", {})
+            _e = _cfg.get("env", {})
+            _t = _cfg.get("training", {})
+            st.markdown("**Reward shaping**")
+            st.table(
+                pd.DataFrame(
+                    [
+                        ("food", _r.get("food", 10.0), "Reward for eating food"),
+                        (
+                            "collision",
+                            _r.get("collision", -10.0),
+                            "Penalty for hitting wall or body",
+                        ),
+                        (
+                            "toward",
+                            _r.get("toward", 0.1),
+                            "Reward per step moving closer to food",
+                        ),
+                        (
+                            "away",
+                            _r.get("away", -0.3),
+                            "Penalty per step moving away from food",
+                        ),
+                    ],
+                    columns=["key", "value", "description"],
+                )
+            )
+            st.markdown("**PPO**")
+            st.table(
+                pd.DataFrame(
+                    [
+                        (
+                            "learning_rate",
+                            _p.get("learning_rate"),
+                            "Adam learning rate",
+                        ),
+                        (
+                            "gamma",
+                            _p.get("gamma"),
+                            "Discount factor for future rewards",
+                        ),
+                        (
+                            "ent_coef",
+                            _p.get("ent_coef"),
+                            "Entropy bonus — higher = more exploration",
+                        ),
+                        (
+                            "clip_range",
+                            _p.get("clip_range"),
+                            "PPO clip ε — limits policy update size",
+                        ),
+                        (
+                            "n_steps",
+                            _p.get("n_steps"),
+                            "Steps collected per rollout per env",
+                        ),
+                        ("n_epochs", _p.get("n_epochs"), "Gradient steps per rollout"),
+                        ("batch_size", _p.get("batch_size"), "Mini-batch size"),
+                    ],
+                    columns=["key", "value", "description"],
+                )
+            )
+            st.markdown("**Environment**")
+            st.table(
+                pd.DataFrame(
+                    [
+                        (
+                            "grid_w × grid_h",
+                            f"{_e.get('grid_w')} × {_e.get('grid_h')}",
+                            "Board size (border cells are walls)",
+                        ),
+                        (
+                            "max_steps",
+                            _e.get("max_steps"),
+                            "Steps before episode is truncated",
+                        ),
+                        (
+                            "total_timesteps",
+                            _t.get("total_timesteps"),
+                            "Training budget",
+                        ),
+                        ("n_envs", _t.get("n_envs"), "Parallel environments"),
+                    ],
+                    columns=["key", "value", "description"],
+                )
+            )
+    except (FileNotFoundError, TypeError):
+        pass  # config path not yet valid — silently skip
 
     # Status + progress — small, below the button
     state: TrainingState | None = st.session_state.training_state

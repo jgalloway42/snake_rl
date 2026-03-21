@@ -21,12 +21,20 @@ class SnakeEnv(gym.Env):
         grid_h: int = 24,
         max_steps: int = 500,
         render_mode: str | None = None,
+        food_reward: float = 10.0,
+        collision_penalty: float = -10.0,
+        toward_reward: float = 0.1,
+        away_penalty: float = -0.3,
     ) -> None:
         super().__init__()
         self.grid_w = grid_w
         self.grid_h = grid_h
         self.max_steps = max_steps
         self.render_mode = render_mode
+        self.food_reward = food_reward
+        self.collision_penalty = collision_penalty
+        self.toward_reward = toward_reward
+        self.away_penalty = away_penalty
 
         self.observation_space = spaces.Box(
             low=0.0,
@@ -79,17 +87,19 @@ class SnakeEnv(gym.Env):
         reward = 0.0
 
         if collision:
-            reward = -10.0
+            reward = self.collision_penalty
             terminated = True
         elif self._snake.head == self._food.position:
-            reward = 10.0
+            reward = self.food_reward
             self._snake.grow()
             occupied = set(self._snake.positions)
             self._food.randomize(occupied)
         else:
             hx2, hy2 = self._snake.head
             dist_after = abs(hx2 - fx) + abs(hy2 - fy)
-            reward = 0.1 if dist_after < dist_before else -0.1
+            reward = (
+                self.toward_reward if dist_after < dist_before else self.away_penalty
+            )
 
         if not terminated and self._steps >= self.max_steps:
             truncated = True

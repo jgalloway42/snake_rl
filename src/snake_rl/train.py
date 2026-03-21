@@ -207,6 +207,7 @@ def train(
     train_cfg = cfg["training"]
     ppo_cfg = cfg["ppo"]
     env_cfg = cfg["env"]
+    reward_cfg = cfg.get("reward", {})
     policy_cfg = cfg["policy"]
     mlflow_cfg = cfg["mlflow"]
 
@@ -227,6 +228,10 @@ def train(
             "grid_w": env_cfg["grid_w"],
             "grid_h": env_cfg["grid_h"],
             "max_steps": env_cfg["max_steps"],
+            "food_reward": reward_cfg.get("food", 10.0),
+            "collision_penalty": reward_cfg.get("collision", -10.0),
+            "toward_reward": reward_cfg.get("toward", 0.1),
+            "away_penalty": reward_cfg.get("away", -0.3),
         }
         vec_env = make_vec_env(
             SnakeEnv,

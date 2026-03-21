@@ -19,6 +19,12 @@ env:
   grid_h: 24
   max_steps: 500
 
+reward:
+  food: 10.0        # reward for eating food
+  collision: -10.0  # penalty for hitting a wall or the snake's own body
+  toward: 0.1       # reward per step that moves closer to food (Manhattan distance)
+  away: -0.3        # penalty per step that moves away from food
+
 policy:
   features_dim: 64
   hidden_dims: [256, 128]

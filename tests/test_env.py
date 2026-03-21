@@ -134,7 +134,7 @@ class TestReward:
         env._food.position = (6, 3)  # food to the right — moving away
         _, reward, terminated, _, _ = env.step(Action.STRAIGHT)
         if not terminated:
-            assert reward == pytest.approx(-0.1)
+            assert reward == pytest.approx(env.away_penalty)
 
 
 # ---------------------------------------------------------------------------
