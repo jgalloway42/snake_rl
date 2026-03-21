@@ -70,14 +70,18 @@ make install
 # Run tests
 make test
 
-# Train the agent (~1M timesteps)
-# Launches MLflow UI in the background + starts training.
+# Train the agent from the CLI (~1M timesteps)
 # Every 50 episodes a pygame window shows the current agent playing a full game.
 make train
 
-# Watch the trained agent play interactively (Streamlit app)
+# Launch the unified Streamlit app (Train + Play tabs)
 make run
 ```
+
+The Streamlit app has two tabs:
+
+- **Train** — configure a run, start/stop training, watch real-time metric charts (episode reward, value loss, policy loss, entropy, KL divergence, episode length), and see a live game preview every 50 episodes.
+- **Play** — load a trained model and watch it play. Run single episodes or continuously, with a live leaderboard.
 
 ---
 
@@ -117,6 +121,51 @@ snake-rl/
 ├── Makefile
 └── pyproject.toml
 ```
+
+---
+
+---
+
+## Improving the agent
+
+The default config trains for 1M timesteps on a 24×24 grid — a reasonable starting point. Here are five options for getting a better agent:
+
+**1. Continue from a checkpoint**
+
+Training saves `models/snake_ppo.zip` after each run. In the Streamlit Train tab, paste the path into "Continue from model" to pick up where you left off. Equivalent CLI flag: `--config config/default.yaml` (training auto-saves; re-run `make train` after loading the checkpoint manually via `PPO.load()`).
+
+**2. Longer runs**
+
+Increase `training.total_timesteps` in `config/default.yaml`. Snake is a hard exploration problem — agents often don't start consistently finding food until ~500k steps, and don't chain multiple food items until 2M+.
+
+```yaml
+training:
+  total_timesteps: 5_000_000
+```
+
+**3. Reward shaping**
+
+Edit `snake_rl/env.py` to tune the reward signal:
+- Increase the food reward (currently `+10`) relative to collision penalty (`-10`) to encourage risk-taking.
+- Reduce or remove the ±0.1 Manhattan distance shaping once the agent starts finding food reliably — it can discourage longer paths that eventually reach food.
+- Add a small survival bonus (`+0.01` per step) to encourage longer episodes.
+
+**4. Curriculum: start on a smaller grid**
+
+A 10×10 grid is much easier to explore than 24×24. Train to convergence on the small grid, then transfer:
+
+```yaml
+env:
+  grid_w: 10
+  grid_h: 10
+  max_steps: 200
+```
+
+Load the small-grid checkpoint and continue training on the full 24×24 grid. The policy generalises better than training from scratch on the large grid.
+
+**5. Swap to a CNN policy**
+
+The current MLP flattens the 3-channel spatial observation. A CNN can exploit the 2-D structure. To switch, replace `SnakeMLP` in `policy.py` with a `NatureCNN`-style extractor and update the `policy_kwargs` in `train.py`. No changes to the environment are needed — the `(3, H, W)` observation shape is already CNN-friendly.
 
 ---
 

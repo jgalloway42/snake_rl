@@ -6,9 +6,12 @@ All hyperparameters come from config/default.yaml — nothing is hardcoded here.
 from __future__ import annotations
 
 import shutil
+import threading
 from pathlib import Path
+from typing import Any
 
 import mlflow
+import numpy as np
 import yaml
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
@@ -18,29 +21,88 @@ from snake_rl.env import SnakeEnv
 from snake_rl.policy import SnakeMLP
 
 # ---------------------------------------------------------------------------
-# MLflow callback
+# Training state (shared between training thread and Streamlit UI)
+# ---------------------------------------------------------------------------
+
+
+class TrainingState:
+    """Thread-safe container for live training metrics and control flags."""
+
+    def __init__(self) -> None:
+        self.metrics: list[dict[str, Any]] = []
+        self.status: str = "idle"
+        self.current_timesteps: int = 0
+        self.total_timesteps: int = 0
+        self.latest_frame: np.ndarray | None = None
+        self.stop_requested: bool = False
+        self.error_msg: str = ""
+        self._lock = threading.Lock()
+
+    def append_metrics(self, entry: dict[str, Any]) -> None:
+        with self._lock:
+            self.metrics.append(entry)
+
+    def get_metrics_snapshot(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(self.metrics)
+
+
+# ---------------------------------------------------------------------------
+# MLflow + live-metrics callback
 # ---------------------------------------------------------------------------
 
 
 class MLflowCallback(BaseCallback):
-    """Log SB3 rollout metrics to MLflow every rollout."""
+    """Log SB3 rollout/train metrics to MLflow and optionally to TrainingState."""
+
+    _SB3_KEYS: dict[str, str] = {
+        "ep_rew_mean": "rollout/ep_rew_mean",
+        "ep_len_mean": "rollout/ep_len_mean",
+        "value_loss": "train/value_loss",
+        "policy_loss": "train/policy_gradient_loss",
+        "entropy": "train/entropy_loss",
+        "approx_kl": "train/approx_kl",
+        "clip_fraction": "train/clip_fraction",
+    }
+
+    def __init__(
+        self,
+        training_state: TrainingState | None = None,
+        verbose: int = 0,
+    ) -> None:
+        super().__init__(verbose)
+        self.training_state = training_state
 
     def _on_step(self) -> bool:
+        if self.training_state is not None:
+            self.training_state.current_timesteps = self.num_timesteps
         return True
 
     def _on_rollout_end(self) -> None:
-        if "rollout/ep_rew_mean" in self.logger.name_to_value:
-            mlflow.log_metric(
-                "ep_rew_mean",
-                self.logger.name_to_value["rollout/ep_rew_mean"],
-                step=self.num_timesteps,
-            )
-        if "rollout/ep_len_mean" in self.logger.name_to_value:
-            mlflow.log_metric(
-                "ep_len_mean",
-                self.logger.name_to_value["rollout/ep_len_mean"],
-                step=self.num_timesteps,
-            )
+        entry: dict[str, Any] = {"step": self.num_timesteps}
+        for key, sb3_key in self._SB3_KEYS.items():
+            if sb3_key in self.logger.name_to_value:
+                val = float(self.logger.name_to_value[sb3_key])
+                entry[key] = val
+                mlflow.log_metric(key, val, step=self.num_timesteps)
+        if self.training_state is not None and len(entry) > 1:
+            self.training_state.append_metrics(entry)
+
+
+# ---------------------------------------------------------------------------
+# Stop callback
+# ---------------------------------------------------------------------------
+
+
+class StopCallback(BaseCallback):
+    """Signals SB3 to halt when training_state.stop_requested is set."""
+
+    def __init__(self, training_state: TrainingState, verbose: int = 0) -> None:
+        super().__init__(verbose)
+        self.training_state = training_state
+
+    def _on_step(self) -> bool:
+        return not self.training_state.stop_requested
 
 
 # ---------------------------------------------------------------------------
@@ -49,17 +111,26 @@ class MLflowCallback(BaseCallback):
 
 
 class RenderCallback(BaseCallback):
-    """Run one visible episode every N episodes during training.
+    """Run one episode every N completed episodes.
 
-    The pygame window stays open between episodes so the board remains visible.
+    When *training_state* is provided, renders headlessly and pushes the last
+    frame to ``training_state.latest_frame`` (for Streamlit preview).
+    Otherwise opens a persistent pygame window (CLI training).
     """
 
-    def __init__(self, render_every: int, env_kwargs: dict, verbose: int = 0) -> None:
+    def __init__(
+        self,
+        render_every: int,
+        env_kwargs: dict,
+        training_state: TrainingState | None = None,
+        verbose: int = 0,
+    ) -> None:
         super().__init__(verbose)
         self.render_every = render_every
         self.env_kwargs = env_kwargs
+        self.training_state = training_state
         self._episode_count = 0
-        self._render_env = None  # persistent — window stays open between episodes
+        self._render_env = None  # persistent pygame window
 
     def _on_step(self) -> bool:
         dones = self.locals.get("dones", [])
@@ -70,7 +141,10 @@ class RenderCallback(BaseCallback):
                     self.render_every > 0
                     and self._episode_count % self.render_every == 0
                 ):
-                    self._run_render_episode()
+                    if self.training_state is not None:
+                        self._run_headless_episode()
+                    else:
+                        self._run_render_episode()
         return True
 
     def _run_render_episode(self) -> None:
@@ -88,6 +162,19 @@ class RenderCallback(BaseCallback):
                 return
         # Leave window open — last frame stays visible until the next episode
 
+    def _run_headless_episode(self) -> None:
+        env = SnakeEnv(**self.env_kwargs, render_mode="rgb_array")
+        obs, _ = env.reset()
+        done = False
+        while not done:
+            frame = env.render()
+            if frame is not None and self.training_state is not None:
+                self.training_state.latest_frame = frame
+            action, _ = self.model.predict(obs, deterministic=True)
+            obs, _, terminated, truncated, _ = env.step(int(action))
+            done = terminated or truncated
+        env.close()
+
     def _on_training_end(self) -> None:
         if self._render_env is not None:
             self._render_env.close()
@@ -99,7 +186,18 @@ class RenderCallback(BaseCallback):
 # ---------------------------------------------------------------------------
 
 
-def train(config_path: str = "config/default.yaml") -> None:
+def train(
+    config_path: str = "config/default.yaml",
+    training_state: TrainingState | None = None,
+    continue_from: str | None = None,
+) -> None:
+    """Run a full PPO training session.
+
+    Args:
+        config_path:     Path to the YAML config file.
+        training_state:  Optional shared state for Streamlit live updates.
+        continue_from:   Path to a .zip model to continue training from.
+    """
     with open(config_path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
@@ -108,6 +206,10 @@ def train(config_path: str = "config/default.yaml") -> None:
     env_cfg = cfg["env"]
     policy_cfg = cfg["policy"]
     mlflow_cfg = cfg["mlflow"]
+
+    if training_state is not None:
+        training_state.total_timesteps = train_cfg["total_timesteps"]
+        training_state.status = "training"
 
     mlflow.set_tracking_uri(mlflow_cfg["tracking_uri"])
     mlflow.set_experiment(mlflow_cfg["experiment_name"])
@@ -137,29 +239,41 @@ def train(config_path: str = "config/default.yaml") -> None:
             },
         }
 
-        model = PPO(
-            "MlpPolicy",
-            vec_env,
-            learning_rate=ppo_cfg["learning_rate"],
-            n_steps=ppo_cfg["n_steps"],
-            batch_size=ppo_cfg["batch_size"],
-            n_epochs=ppo_cfg["n_epochs"],
-            gamma=ppo_cfg["gamma"],
-            clip_range=ppo_cfg["clip_range"],
-            ent_coef=ppo_cfg["ent_coef"],
-            policy_kwargs=policy_kwargs,
-            verbose=1,
-        )
+        if continue_from:
+            model = PPO.load(continue_from, env=vec_env)
+        else:
+            model = PPO(
+                "MlpPolicy",
+                vec_env,
+                learning_rate=ppo_cfg["learning_rate"],
+                n_steps=ppo_cfg["n_steps"],
+                batch_size=ppo_cfg["batch_size"],
+                n_epochs=ppo_cfg["n_epochs"],
+                gamma=ppo_cfg["gamma"],
+                clip_range=ppo_cfg["clip_range"],
+                ent_coef=ppo_cfg["ent_coef"],
+                policy_kwargs=policy_kwargs,
+                verbose=1,
+            )
 
-        callbacks = [MLflowCallback()]
+        callbacks = [MLflowCallback(training_state=training_state)]
         render_every = train_cfg.get("render_every_n_episodes", 0)
         if render_every and render_every > 0:
-            callbacks.append(RenderCallback(render_every, env_kwargs))
+            callbacks.append(
+                RenderCallback(render_every, env_kwargs, training_state=training_state)
+            )
+        if training_state is not None:
+            callbacks.append(StopCallback(training_state))
 
         model.learn(
             total_timesteps=train_cfg["total_timesteps"],
             callback=callbacks,
         )
+
+        if training_state is not None:
+            training_state.status = (
+                "stopped" if training_state.stop_requested else "done"
+            )
 
         save_dir = Path(train_cfg["save_path"])
         save_dir.mkdir(parents=True, exist_ok=True)

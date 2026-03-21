@@ -15,7 +15,6 @@ test:
 check: format lint test
 
 train:
-	mlflow ui --backend-store-uri mlruns &
 	SDL_AUDIODRIVER=dummy python -m snake_rl.main --train
 
 run:
