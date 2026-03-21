@@ -39,6 +39,15 @@ if "training_state" not in st.session_state:
     st.session_state.training_state = None
 if "training_thread" not in st.session_state:
     st.session_state.training_thread = None
+# Play tab: persistent env across reruns so each rerun does one step
+if "play_env" not in st.session_state:
+    st.session_state.play_env = None
+if "play_obs" not in st.session_state:
+    st.session_state.play_obs = None
+if "play_info" not in st.session_state:
+    st.session_state.play_info = {}
+if "play_rewards" not in st.session_state:
+    st.session_state.play_rewards = []  # cumulative reward trace for current episode
 
 
 # ---------------------------------------------------------------------------
@@ -71,28 +80,23 @@ def _start_training(config_path: str, continue_from: str | None) -> None:
     thread.start()
 
 
-def _run_episode(
-    model: PPO,
-    fps: int,
-    frame_ph,  # st.empty()
-    score_ph,  # st.empty()
-) -> tuple[int, int]:
-    """Run one full episode; stream frames into placeholders."""
-    env = SnakeEnv(render_mode="rgb_array")
-    obs, _ = env.reset()
-    info: dict = {}
-    done = False
-    while not done:
-        frame = env.render()
-        if frame is not None:
-            frame_ph.image(frame, channels="RGB", width=480)
-        action, _ = model.predict(obs, deterministic=True)
-        obs, _, terminated, truncated, info = env.step(int(action))
-        score_ph.markdown(f"**Score:** {info['score']}  |  **Steps:** {info['steps']}")
-        done = terminated or truncated
-        time.sleep(1 / fps)
-    env.close()
-    return info["score"], info["steps"]
+def _start_play_episode() -> None:
+    """Open a new env and store it in session state for step-by-step playback."""
+    play_env = SnakeEnv(render_mode="rgb_array")
+    play_obs, _ = play_env.reset()
+    st.session_state.play_env = play_env
+    st.session_state.play_obs = play_obs
+    st.session_state.play_info = {}
+    st.session_state.play_rewards = []
+
+
+def _stop_play_episode() -> None:
+    """Close the active env and clear play state."""
+    if st.session_state.play_env is not None:
+        st.session_state.play_env.close()
+    st.session_state.play_env = None
+    st.session_state.play_obs = None
+    st.session_state.play_info = {}
 
 
 def _record_result(result_score: int, result_steps: int, summary_ph) -> None:
@@ -255,30 +259,72 @@ with tab_play:
         p_summary_ph = st.empty()
 
         p_col1, p_col2, p_col3 = st.columns(3)
+        episode_active = st.session_state.play_env is not None
         run_episode_btn = p_col1.button(
-            "Run Episode", disabled=st.session_state.model is None
+            "Run Episode",
+            disabled=st.session_state.model is None or episode_active,
         )
         run_continuously = p_col2.toggle(
             "Run Continuously", value=st.session_state.run_continuously
         )
         exit_btn = p_col3.button("Exit / Stop")
 
+        # --- Exit: processed first so it takes effect this rerun ---
         if exit_btn:
+            _stop_play_episode()
             st.session_state.run_continuously = False
             st.rerun()
 
         st.session_state.run_continuously = run_continuously
 
+        # --- Start a new episode ---
         if run_episode_btn and st.session_state.model is not None:
-            play_score, play_steps = _run_episode(
-                st.session_state.model, render_fps, p_frame_ph, p_score_ph
-            )
-            _record_result(play_score, play_steps, p_summary_ph)
+            _start_play_episode()
             st.rerun()
 
-        if st.session_state.run_continuously and st.session_state.model is not None:
-            play_score, play_steps = _run_episode(
-                st.session_state.model, render_fps, p_frame_ph, p_score_ph
+        if (
+            st.session_state.run_continuously
+            and st.session_state.model is not None
+            and not episode_active
+        ):
+            _start_play_episode()
+            st.rerun()
+
+        # Reward chart placeholder (shown below the board)
+        reward_chart_ph = st.empty()
+
+        # --- Advance one step in the active episode ---
+        if episode_active and st.session_state.model is not None:
+            env = st.session_state.play_env
+            obs = st.session_state.play_obs
+
+            frame = env.render()
+            if frame is not None:
+                p_frame_ph.image(frame, channels="RGB", width=480)
+
+            action, _ = st.session_state.model.predict(obs, deterministic=True)
+            obs, reward, terminated, truncated, info = env.step(int(action))
+            st.session_state.play_obs = obs
+            st.session_state.play_info = info
+            st.session_state.play_rewards.append(float(reward))
+
+            p_score_ph.markdown(
+                f"**Score:** {info['score']}  |  **Steps:** {info['steps']}"
             )
-            _record_result(play_score, play_steps, p_summary_ph)
+
+            if terminated or truncated:
+                _record_result(info["score"], info["steps"], p_summary_ph)
+                _stop_play_episode()
+
+        # Draw cumulative reward chart for current (or just-finished) episode
+        if st.session_state.play_rewards:
+            rewards = st.session_state.play_rewards
+            cumulative = pd.Series(rewards).cumsum()
+            reward_chart_ph.line_chart(
+                pd.DataFrame({"cumulative reward": cumulative}),
+                height=180,
+            )
+
+        if episode_active:
+            time.sleep(1 / render_fps)
             st.rerun()
