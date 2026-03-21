@@ -208,9 +208,9 @@ with tab_train:
                     col.subheader(title)
                     col.line_chart(chart_df, height=200)
 
-    # Auto-refresh while training
+    # Auto-refresh while training — fast enough to animate render episodes
     if _is_training():
-        time.sleep(2)
+        time.sleep(0.1)
         st.rerun()
 
 

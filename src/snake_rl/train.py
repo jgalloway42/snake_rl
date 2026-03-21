@@ -163,6 +163,8 @@ class RenderCallback(BaseCallback):
         # Leave window open — last frame stays visible until the next episode
 
     def _run_headless_episode(self) -> None:
+        import time  # pylint: disable=import-outside-toplevel
+
         env = SnakeEnv(**self.env_kwargs, render_mode="rgb_array")
         obs, _ = env.reset()
         done = False
@@ -173,6 +175,7 @@ class RenderCallback(BaseCallback):
             action, _ = self.model.predict(obs, deterministic=True)
             obs, _, terminated, truncated, _ = env.step(int(action))
             done = terminated or truncated
+            time.sleep(0.08)  # ~12 FPS — visible to Streamlit's polling loop
         env.close()
 
     def _on_training_end(self) -> None:
