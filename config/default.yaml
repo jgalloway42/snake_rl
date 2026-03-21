@@ -1,5 +1,5 @@
 training:
-  total_timesteps: 1_000_000
+  total_timesteps: 5_000_000
   render_every_n_episodes: 50   # 0 or -1 = fully headless; 1 = every episode
   n_envs: 4
   save_path: "models/"
