@@ -41,7 +41,7 @@ policy.py        ← PyTorch nn.Module. No pygame. No gymnasium internals.
 rendering.py     ← ALL pygame code lives here and only here.
 train.py         ← SB3 PPO training loop. Wires together env + policy + MLflow.
 streamlit_app.py ← Demo app. Loads trained model, renders live gameplay.
-main.py          ← CLI entry point (snake-rl --train / --stream).
+main.py          ← CLI entry point (snake-rl --train / --run).
 ```
 
 The central design principle: **game logic, rendering, and RL are fully decoupled**. The test suite never touches pygame. The environment can run headlessly on any machine.
@@ -70,14 +70,13 @@ make install
 # Run tests
 make test
 
-# Train the agent (~1M timesteps, logs to MLflow)
+# Train the agent (~1M timesteps)
+# Launches MLflow UI in the background + starts training.
+# Every 50 episodes a pygame window shows the current agent playing a full game.
 make train
 
-# View training metrics
-mlflow ui
-
-# Watch the trained agent play
-make stream
+# Watch the trained agent play interactively (Streamlit app)
+make run
 ```
 
 ---

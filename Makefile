@@ -1,4 +1,4 @@
-.PHONY: install format lint test check train stream clean
+.PHONY: install format lint test check train run clean
 
 install:
 	pip install -e ".[dev]"
@@ -15,10 +15,10 @@ test:
 check: format lint test
 
 train:
-	SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
-	python -m snake_rl.main --train
+	mlflow ui --backend-store-uri mlruns &
+	SDL_AUDIODRIVER=dummy python -m snake_rl.main --train
 
-stream:
+run:
 	python -m snake_rl.main --stream
 
 clean:
