@@ -49,13 +49,17 @@ class MLflowCallback(BaseCallback):
 
 
 class RenderCallback(BaseCallback):
-    """Run one visible episode every N episodes during training."""
+    """Run one visible episode every N episodes during training.
+
+    The pygame window stays open between episodes so the board remains visible.
+    """
 
     def __init__(self, render_every: int, env_kwargs: dict, verbose: int = 0) -> None:
         super().__init__(verbose)
         self.render_every = render_every
         self.env_kwargs = env_kwargs
         self._episode_count = 0
+        self._render_env = None  # persistent — window stays open between episodes
 
     def _on_step(self) -> bool:
         dones = self.locals.get("dones", [])
@@ -70,16 +74,24 @@ class RenderCallback(BaseCallback):
         return True
 
     def _run_render_episode(self) -> None:
-        render_env = SnakeEnv(**self.env_kwargs, render_mode="human")
-        obs, _ = render_env.reset()
+        if self._render_env is None:
+            self._render_env = SnakeEnv(**self.env_kwargs, render_mode="human")
+        obs, _ = self._render_env.reset()
         done = False
         while not done:
             action, _ = self.model.predict(obs, deterministic=True)
-            obs, _, terminated, truncated, _ = render_env.step(int(action))
+            obs, _, terminated, truncated, _ = self._render_env.step(int(action))
             done = terminated or truncated
-            if not render_env.handle_events():
-                break
-        render_env.close()
+            if not self._render_env.handle_events():
+                self._render_env.close()
+                self._render_env = None
+                return
+        # Leave window open — last frame stays visible until the next episode
+
+    def _on_training_end(self) -> None:
+        if self._render_env is not None:
+            self._render_env.close()
+            self._render_env = None
 
 
 # ---------------------------------------------------------------------------

@@ -154,19 +154,19 @@ class TestTermination:
         assert truncated is False
 
     def test_truncated_after_max_steps(self):
+        # Snake at (3,3) facing RIGHT: steps to (4,3),(5,3),(6,3) — all interior.
+        # max_steps=3 triggers truncation before any wall is reached.
         env = SnakeEnv(grid_w=8, grid_h=8, max_steps=3)
         env.reset()
-        # Place food far away so no eating occurs; snake in centre facing right
-        env._snake.positions = [(4, 4)]
+        env._snake.positions = [(3, 3)]
         env._snake.direction = RIGHT
-        env._food.position = (0, 0)
-        terminated = False
-        truncated = False
+        env._food.position = (1, 6)
         for _ in range(3):
             _, _, terminated, truncated, _ = env.step(Action.STRAIGHT)
             if terminated or truncated:
                 break
-        assert truncated is True or terminated is True  # one must trigger
+        assert truncated is True
+        assert terminated is False  # one must trigger
 
     def test_neither_flag_on_normal_step(self):
         env = make_env()

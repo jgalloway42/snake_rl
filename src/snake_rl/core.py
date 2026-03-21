@@ -108,7 +108,8 @@ class Snake:
 
     def _is_collision(self, point: tuple[int, int]) -> bool:
         x, y = point
-        if x < 0 or x >= self.grid_w or y < 0 or y >= self.grid_h:
+        # Border cells are walls — playable area is the interior
+        if x < 1 or x >= self.grid_w - 1 or y < 1 or y >= self.grid_h - 1:
             return True
         if point in self.positions[1:]:
             return True
@@ -123,11 +124,11 @@ class Food:
         self.randomize(set())
 
     def randomize(self, occupied: set[tuple[int, int]]) -> None:
-        """Place food on a random free cell, excluding occupied positions."""
+        """Place food on a random free interior cell, excluding occupied positions."""
         free = [
             (x, y)
-            for x in range(self.grid_w)
-            for y in range(self.grid_h)
+            for x in range(1, self.grid_w - 1)
+            for y in range(1, self.grid_h - 1)
             if (x, y) not in occupied
         ]
         if not free:

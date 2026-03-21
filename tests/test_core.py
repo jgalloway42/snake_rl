@@ -52,19 +52,20 @@ class TestMovement:
         assert s.head == (13, 12)
 
     def test_step_into_left_wall_returns_true(self):
-        s = make_snake(LEFT, start=(0, 12))
+        # Border cell x=0 is a wall; stepping from x=1 onto it is a collision
+        s = make_snake(LEFT, start=(1, 12))
         assert s.step() is True
 
     def test_step_into_right_wall_returns_true(self):
-        s = make_snake(RIGHT, start=(23, 12))
+        s = make_snake(RIGHT, start=(22, 12))
         assert s.step() is True
 
     def test_step_into_top_wall_returns_true(self):
-        s = make_snake(UP, start=(12, 0))
+        s = make_snake(UP, start=(12, 1))
         assert s.step() is True
 
     def test_step_into_bottom_wall_returns_true(self):
-        s = make_snake(DOWN, start=(12, 23))
+        s = make_snake(DOWN, start=(12, 22))
         assert s.step() is True
 
     def test_valid_step_returns_false(self):
@@ -72,12 +73,11 @@ class TestMovement:
         assert s.step() is False
 
     def test_no_wrapping(self):
-        """Confirm position goes negative / OOB rather than wrapping."""
-        s = make_snake(LEFT, start=(0, 12))
-        # step() detects collision and returns True without updating positions
+        """Confirm position stops at border rather than wrapping."""
+        s = make_snake(LEFT, start=(1, 12))
         result = s.step()
         assert result is True
-        assert s.head == (0, 12)  # position unchanged on collision
+        assert s.head == (1, 12)  # position unchanged on collision
 
     def test_step_into_body_returns_true(self):
         # 4-cell snake curled so the next step lands on a body cell.
