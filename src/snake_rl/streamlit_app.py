@@ -97,6 +97,19 @@ def _stop_play_episode() -> None:
     st.session_state.play_env = None
     st.session_state.play_obs = None
     st.session_state.play_info = {}
+    st.session_state.play_rewards = []
+
+
+def _on_play_exit() -> None:
+    """on_click callback for the Exit button — runs before widgets re-render.
+
+    Streamlit forbids modifying a keyed widget's session state key after the
+    widget is instantiated in the same script run.  Using on_click sidesteps
+    this: the callback executes before the next render, so the toggle's bound
+    key can be safely reset here.
+    """
+    _stop_play_episode()
+    st.session_state.run_continuously = False
 
 
 def _record_result(result_score: int, result_steps: int, summary_ph) -> None:
@@ -270,16 +283,12 @@ with tab_play:
             "Run Episode",
             disabled=st.session_state.model is None or episode_active,
         )
-        # key= binds the toggle directly to session_state.run_continuously so
-        # setting st.session_state.run_continuously = False resets the widget.
+        # key= binds toggle to session_state.run_continuously.
+        # Exit uses on_click=_on_play_exit so the callback resets the key
+        # before the next render (direct assignment after widget creation
+        # raises StreamlitAPIException).
         p_col2.toggle("Run Continuously", key="run_continuously")
-        exit_btn = p_col3.button("Exit / Stop", key="play_exit")
-
-        # --- Exit: processed first so it takes effect this rerun ---
-        if exit_btn:
-            _stop_play_episode()
-            st.session_state.run_continuously = False
-            st.rerun()
+        p_col3.button("Exit / Stop", key="play_exit", on_click=_on_play_exit)
 
         # --- Start a new episode ---
         if run_episode_btn and st.session_state.model is not None:
