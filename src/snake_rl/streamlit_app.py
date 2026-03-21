@@ -140,13 +140,19 @@ with tab_train:
         "Config YAML", value="config/default.yaml", key="t_config"
     )
     t_continue_from = col_c2.text_input(
-        "Continue from model (.zip, optional)", value="", key="t_continue"
+        "Continue from model (.zip, optional)",
+        value="models/snake_ppo.zip",
+        key="t_continue",
     )
 
     # Control buttons
-    col_b1, col_b2 = st.columns(2)
+    col_b1, col_b2, col_b3 = st.columns(3)
     start_btn = col_b1.button("Start Training", disabled=_is_training())
     stop_btn = col_b2.button("Stop Training", disabled=not _is_training())
+    train_exit_btn = col_b3.button("Exit / Stop", key="train_exit")
+
+    if train_exit_btn and st.session_state.training_state is not None:
+        st.session_state.training_state.stop_requested = True
 
     if start_btn:
         _start_training(t_config_path, t_continue_from or None)
@@ -264,18 +270,16 @@ with tab_play:
             "Run Episode",
             disabled=st.session_state.model is None or episode_active,
         )
-        run_continuously = p_col2.toggle(
-            "Run Continuously", value=st.session_state.run_continuously
-        )
-        exit_btn = p_col3.button("Exit / Stop")
+        # key= binds the toggle directly to session_state.run_continuously so
+        # setting st.session_state.run_continuously = False resets the widget.
+        p_col2.toggle("Run Continuously", key="run_continuously")
+        exit_btn = p_col3.button("Exit / Stop", key="play_exit")
 
         # --- Exit: processed first so it takes effect this rerun ---
         if exit_btn:
             _stop_play_episode()
             st.session_state.run_continuously = False
             st.rerun()
-
-        st.session_state.run_continuously = run_continuously
 
         # --- Start a new episode ---
         if run_episode_btn and st.session_state.model is not None:
