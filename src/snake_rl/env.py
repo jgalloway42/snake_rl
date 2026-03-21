@@ -1,0 +1,157 @@
+"""
+env.py — Gymnasium wrapper for the Snake game.
+No pygame imports at module level; rendering is lazy.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import gymnasium as gym
+from gymnasium import spaces
+
+from snake_rl.core import Action, Food, Snake, apply_action
+
+
+class SnakeEnv(gym.Env):
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
+
+    def __init__(
+        self,
+        grid_w: int = 24,
+        grid_h: int = 24,
+        max_steps: int = 500,
+        render_mode: str | None = None,
+    ) -> None:
+        super().__init__()
+        self.grid_w = grid_w
+        self.grid_h = grid_h
+        self.max_steps = max_steps
+        self.render_mode = render_mode
+
+        self.observation_space = spaces.Box(
+            low=0.0,
+            high=1.0,
+            shape=(3, grid_h, grid_w),
+            dtype=np.float32,
+        )
+        self.action_space = spaces.Discrete(3)
+
+        self._snake: Snake | None = None
+        self._food: Food | None = None
+        self._steps: int = 0
+        self._renderer = None
+
+    # ------------------------------------------------------------------
+    # Gymnasium API
+    # ------------------------------------------------------------------
+
+    def reset(self, *, seed=None, options=None):
+        super().reset(seed=seed)
+        self._snake = Snake(grid_w=self.grid_w, grid_h=self.grid_h)
+        occupied = set(self._snake.positions)
+        self._food = Food(grid_w=self.grid_w, grid_h=self.grid_h)
+        self._food.randomize(occupied)
+        self._steps = 0
+
+        obs = self._get_obs()
+        info = self._get_info()
+
+        if self.render_mode == "human":
+            self._render_human()
+
+        return obs, info
+
+    def step(self, action: int):
+        assert self._snake is not None, "Call reset() before step()"
+
+        new_dir = apply_action(self._snake.direction, Action(action))
+        self._snake.turn(new_dir)
+
+        hx, hy = self._snake.head
+        fx, fy = self._food.position
+        dist_before = abs(hx - fx) + abs(hy - fy)
+
+        collision = self._snake.step()
+        self._steps += 1
+
+        terminated = False
+        truncated = False
+        reward = 0.0
+
+        if collision:
+            reward = -10.0
+            terminated = True
+        elif self._snake.head == self._food.position:
+            reward = 10.0
+            self._snake.grow()
+            occupied = set(self._snake.positions)
+            self._food.randomize(occupied)
+        else:
+            hx2, hy2 = self._snake.head
+            dist_after = abs(hx2 - fx) + abs(hy2 - fy)
+            reward = 0.1 if dist_after < dist_before else -0.1
+
+        if not terminated and self._steps >= self.max_steps:
+            truncated = True
+
+        obs = self._get_obs()
+        info = self._get_info()
+
+        if self.render_mode == "human":
+            self._render_human()
+
+        return obs, reward, terminated, truncated, info
+
+    def render(self):
+        if self.render_mode == "rgb_array":
+            return self._get_rgb_array()
+        if self.render_mode == "human":
+            self._render_human()
+            return None
+
+    def close(self):
+        if self._renderer is not None:
+            self._renderer.close()
+            self._renderer = None
+
+    def handle_events(self) -> bool:
+        """Pump the pygame event queue. Returns False if quit was requested."""
+        if self._renderer is None:
+            return True
+        return self._renderer.handle_events()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_obs(self) -> np.ndarray:
+        obs = np.zeros((3, self.grid_h, self.grid_w), dtype=np.float32)
+        hx, hy = self._snake.head
+        obs[0, hy, hx] = 1.0
+        for bx, by in self._snake.body_cells():
+            obs[1, by, bx] = 1.0
+        fx, fy = self._food.position
+        obs[2, fy, fx] = 1.0
+        return obs
+
+    def _get_info(self) -> dict:
+        return {
+            "score": self._snake.score,
+            "length": self._snake.length,
+            "steps": self._steps,
+        }
+
+    def _get_renderer(self):
+        if self._renderer is None:
+            from snake_rl.rendering import PygameRenderer  # lazy import
+
+            self._renderer = PygameRenderer(self.grid_w, self.grid_h)
+        return self._renderer
+
+    def _render_human(self):
+        renderer = self._get_renderer()
+        renderer.draw(self._snake, self._food, self._snake.score, 0, self._steps)
+
+    def _get_rgb_array(self) -> np.ndarray:
+        renderer = self._get_renderer()
+        return renderer.get_rgb_array(self._snake, self._food)

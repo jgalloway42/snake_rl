@@ -1,0 +1,28 @@
+training:
+  total_timesteps: 1_000_000
+  render_every_n_episodes: 50   # 0 or -1 = fully headless; 1 = every episode
+  n_envs: 4
+  save_path: "models/"
+  model_name: "snake_ppo"
+
+ppo:
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  clip_range: 0.2
+  ent_coef: 0.01
+
+env:
+  grid_w: 24
+  grid_h: 24
+  max_steps: 500
+
+policy:
+  features_dim: 64
+  hidden_dims: [256, 128]
+
+mlflow:
+  experiment_name: "snake-rl"
+  tracking_uri: "mlruns"
