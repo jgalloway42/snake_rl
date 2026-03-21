@@ -19,7 +19,7 @@ train:
 	SDL_AUDIODRIVER=dummy python -m snake_rl.main --train
 
 run:
-	python -m snake_rl.main --stream
+	python -m snake_rl.main --run
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
