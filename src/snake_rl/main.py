@@ -7,6 +7,7 @@ Usage:
 """
 
 import argparse
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +30,19 @@ def cli() -> None:
 
     if args.train:
         from snake_rl.train import train
+
+        def _shutdown(signum, frame):  # pylint: disable=unused-argument
+            """Close pygame cleanly on Ctrl+C / SIGTERM before exiting."""
+            try:
+                import pygame  # pylint: disable=import-outside-toplevel
+
+                if pygame.get_init():
+                    pygame.quit()
+            finally:
+                sys.exit(0)
+
+        signal.signal(signal.SIGINT, _shutdown)
+        signal.signal(signal.SIGTERM, _shutdown)
 
         train(config_path=args.config)
 
