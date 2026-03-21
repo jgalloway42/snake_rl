@@ -175,7 +175,7 @@ class RenderCallback(BaseCallback):
             action, _ = self.model.predict(obs, deterministic=True)
             obs, _, terminated, truncated, _ = env.step(int(action))
             done = terminated or truncated
-            time.sleep(0.08)  # ~12 FPS — visible to Streamlit's polling loop
+            time.sleep(0.03)  # ~33 FPS — fast enough for smooth preview
         env.close()
 
     def _on_training_end(self) -> None:
