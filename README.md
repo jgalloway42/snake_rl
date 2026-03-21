@@ -1,5 +1,7 @@
 # snake-rl
 
+[![CI](https://github.com/jgalloway42/snake_rl/actions/workflows/ci.yml/badge.svg)](https://github.com/jgalloway42/snake_rl/actions/workflows/ci.yml)
+
 A reinforcement learning agent trained to play Snake — built from scratch with a custom PyTorch policy network, Stable Baselines3 PPO, and a full experiment tracking pipeline.
 
 > **Status:** Training in progress. Results and demo GIF coming soon.
@@ -70,7 +72,7 @@ make install
 # Run tests
 make test
 
-# Train the agent from the CLI (~1M timesteps)
+# Train the agent from the CLI (5M timesteps by default)
 # Every 50 episodes a pygame window shows the current agent playing a full game.
 make train
 
@@ -80,7 +82,7 @@ make run
 
 The Streamlit app has two tabs:
 
-- **Train** — configure a run, start/stop training, watch real-time metric charts (episode reward, value loss, policy loss, entropy, KL divergence, episode length), and see a live game preview every 50 episodes.
+- **Train** — configure a run, start/stop training, watch real-time metric charts (episode reward, value loss, policy loss, entropy, KL divergence, episode length), see a live game preview every 50 episodes, and inspect the full config (reward weights, PPO params, environment settings) in a collapsible panel.
 - **Play** — load a trained model and watch it play. Run single episodes or continuously, with a live leaderboard.
 
 ---
@@ -94,7 +96,7 @@ The Streamlit app has two tabs:
 | Mean episode reward | — |
 | Mean episode length | — |
 | Best score | — |
-| Total timesteps | 1,000,000 |
+| Total timesteps | 5,000,000 |
 
 ---
 
@@ -124,11 +126,9 @@ snake-rl/
 
 ---
 
----
-
 ## Improving the agent
 
-The default config trains for 1M timesteps on a 24×24 grid — a reasonable starting point. Here are five options for getting a better agent:
+The default config trains for 5M timesteps on a 24×24 grid — a reasonable starting point. Here are five options for getting a better agent:
 
 **1. Continue from a checkpoint**
 
@@ -145,10 +145,19 @@ training:
 
 **3. Reward shaping**
 
-Edit `snake_rl/env.py` to tune the reward signal:
-- Increase the food reward (currently `+10`) relative to collision penalty (`-10`) to encourage risk-taking.
-- Reduce or remove the ±0.1 Manhattan distance shaping once the agent starts finding food reliably — it can discourage longer paths that eventually reach food.
-- Add a small survival bonus (`+0.01` per step) to encourage longer episodes.
+All reward weights are in `config/default.yaml` under the `reward` key — no code changes needed:
+
+```yaml
+reward:
+  food: 10.0        # reward for eating food
+  collision: -10.0  # penalty for hitting a wall or the snake's own body
+  toward: 0.1       # reward per step moving closer to food (Manhattan distance)
+  away: -0.3        # penalty per step moving away from food
+```
+
+- Increase the food reward relative to collision penalty to encourage risk-taking.
+- Reduce or remove the Manhattan distance shaping (`toward`/`away`) once the agent starts finding food reliably — it can discourage longer paths that eventually reach food.
+- Add a small survival bonus to encourage longer episodes (requires a code change to `env.py`).
 
 **4. Curriculum: start on a smaller grid**
 
