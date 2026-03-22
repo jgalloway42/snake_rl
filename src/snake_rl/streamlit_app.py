@@ -26,10 +26,13 @@ st.set_page_config(page_title="snake-rl", layout="wide")
 # ---------------------------------------------------------------------------
 # Module-level training state — persists across Streamlit reruns AND page
 # refreshes (session_state is reset on refresh; module globals are not).
+# Use `if not in globals()` so reruns don't reset these to None.
 # ---------------------------------------------------------------------------
 
-_active_ts: TrainingState | None = None
-_active_thread: threading.Thread | None = None
+if "_active_ts" not in globals():
+    _active_ts: TrainingState | None = None
+if "_active_thread" not in globals():
+    _active_thread: threading.Thread | None = None
 
 
 # ---------------------------------------------------------------------------
