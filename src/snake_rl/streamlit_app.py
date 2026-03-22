@@ -150,7 +150,7 @@ with tab_train:
     t_title_col, t_exit_col = st.columns([5, 1])
     t_title_col.title("Train Agent")
     train_exit_btn = t_exit_col.button(
-        "Exit / Stop", key="train_exit", use_container_width=True
+        "Exit / Stop", key="train_exit", width="stretch"
     )
     if train_exit_btn and st.session_state.training_state is not None:
         st.session_state.training_state.stop_requested = True
@@ -182,7 +182,7 @@ with tab_train:
     with t_left:
         st.subheader("Live Preview")
         if state is not None and state.latest_frame is not None:
-            st.image(state.latest_frame, channels="RGB", use_container_width=True)
+            st.image(state.latest_frame, channels="RGB", width="stretch")
         else:
             st.caption("Waiting for first render episode...")
 
@@ -221,11 +221,11 @@ with tab_train:
 
     # Single toggle button: Start Training ↔ Stop Training
     if _is_training():
-        if st.button("Stop Training", use_container_width=True):
+        if st.button("Stop Training", width="stretch"):
             if st.session_state.training_state is not None:
                 st.session_state.training_state.stop_requested = True
     else:
-        if st.button("Start Training", use_container_width=True):
+        if st.button("Start Training", width="stretch"):
             _start_training(t_config_path, t_continue_from or None)
             st.rerun()
 
