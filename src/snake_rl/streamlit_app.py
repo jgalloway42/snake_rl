@@ -206,7 +206,7 @@ with tab_train:
                         ),
                     ],
                     columns=["key", "value", "description"],
-                )
+                ).astype({"value": str})
             )
             st.markdown("**PPO**")
             st.table(
@@ -241,7 +241,7 @@ with tab_train:
                         ("batch_size", _p.get("batch_size"), "Mini-batch size"),
                     ],
                     columns=["key", "value", "description"],
-                )
+                ).astype({"value": str})
             )
             st.markdown("**Environment**")
             st.table(
@@ -265,7 +265,7 @@ with tab_train:
                         ("n_envs", _t.get("n_envs"), "Parallel environments"),
                     ],
                     columns=["key", "value", "description"],
-                )
+                ).astype({"value": str})
             )
     except (FileNotFoundError, TypeError):
         pass  # config path not yet valid — silently skip
