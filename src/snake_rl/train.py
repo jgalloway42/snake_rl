@@ -140,6 +140,7 @@ class RenderCallback(BaseCallback):
         self.training_state = training_state
         self._episode_count = 0
         self._render_env = None  # persistent pygame window
+        self._render_thread: threading.Thread | None = None
 
     def _on_step(self) -> bool:
         dones = self.locals.get("dones", [])
@@ -151,7 +152,15 @@ class RenderCallback(BaseCallback):
                     and self._episode_count % self.render_every == 0
                 ):
                     if self.training_state is not None:
-                        self._run_headless_episode()
+                        # Skip if a render thread is still running
+                        if (
+                            self._render_thread is None
+                            or not self._render_thread.is_alive()
+                        ):
+                            self._render_thread = threading.Thread(
+                                target=self._run_headless_episode, daemon=True
+                            )
+                            self._render_thread.start()
                     else:
                         self._run_render_episode()
         return True
@@ -184,7 +193,12 @@ class RenderCallback(BaseCallback):
             action, _ = self.model.predict(obs, deterministic=True)
             obs, _, terminated, truncated, _ = env.step(int(action))
             done = terminated or truncated
-            time.sleep(0.03)  # ~33 FPS — fast enough for smooth preview
+            time.sleep(0.05)
+        # Show the final (collision) frame briefly before the thread exits
+        frame = env.render()
+        if frame is not None and self.training_state is not None:
+            self.training_state.latest_frame = frame
+        time.sleep(0.5)
         env.close()
 
     def _on_training_end(self) -> None:
