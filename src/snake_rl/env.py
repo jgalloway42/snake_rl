@@ -48,6 +48,7 @@ class SnakeEnv(gym.Env):
         self._food: Food | None = None
         self._steps: int = 0
         self._collision: bool = False
+        self._timeout: bool = False
         self._renderer = None
 
     # ------------------------------------------------------------------
@@ -62,6 +63,7 @@ class SnakeEnv(gym.Env):
         self._food.randomize(occupied)
         self._steps = 0
         self._collision = False
+        self._timeout = False
 
         obs = self._get_obs()
         info = self._get_info()
@@ -110,6 +112,7 @@ class SnakeEnv(gym.Env):
         info = self._get_info()
 
         self._collision = terminated
+        self._timeout = truncated
 
         if self.render_mode == "human":
             self._render_human()
@@ -165,9 +168,12 @@ class SnakeEnv(gym.Env):
     def _render_human(self):
         renderer = self._get_renderer()
         renderer.draw(
-            self._snake, self._food, self._snake.score, 0, self._steps, self._collision
+            self._snake, self._food, self._snake.score, 0, self._steps,
+            self._collision, self._timeout,
         )
 
     def _get_rgb_array(self) -> np.ndarray:
         renderer = self._get_renderer()
-        return renderer.get_rgb_array(self._snake, self._food, self._collision)
+        return renderer.get_rgb_array(
+            self._snake, self._food, self._collision, self._timeout
+        )
