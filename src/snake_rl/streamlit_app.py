@@ -149,9 +149,7 @@ with tab_train:
     # Title row — EXIT top-right
     t_title_col, t_exit_col = st.columns([5, 1])
     t_title_col.title("Train Agent")
-    train_exit_btn = t_exit_col.button(
-        "Exit / Stop", key="train_exit", width="stretch"
-    )
+    train_exit_btn = t_exit_col.button("Exit / Stop", key="train_exit", width="stretch")
     if train_exit_btn and st.session_state.training_state is not None:
         st.session_state.training_state.stop_requested = True
 
