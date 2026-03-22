@@ -24,15 +24,21 @@ from snake_rl.train import train as run_training
 st.set_page_config(page_title="snake-rl", layout="wide")
 
 # ---------------------------------------------------------------------------
-# Module-level training state — persists across Streamlit reruns AND page
-# refreshes (session_state is reset on refresh; module globals are not).
-# Use `if not in globals()` so reruns don't reset these to None.
+# Cross-refresh singleton — survives page refreshes (session_state resets,
+# cache_resource does not). Used only for zombie thread detection/cleanup.
 # ---------------------------------------------------------------------------
 
-if "_active_ts" not in globals():
-    _active_ts: TrainingState | None = None
-if "_active_thread" not in globals():
-    _active_thread: threading.Thread | None = None
+
+@st.cache_resource
+def _get_mgr():
+    class _Mgr:
+        ts: TrainingState | None = None
+        thread: threading.Thread | None = None
+
+    return _Mgr()
+
+
+_mgr = _get_mgr()
 
 
 # ---------------------------------------------------------------------------
@@ -62,9 +68,9 @@ if "play_rewards" not in st.session_state:
     st.session_state.play_rewards = []  # cumulative reward trace for current episode
 
 # Reconnect to any training thread that survived a page refresh.
-if _active_thread is not None and _active_thread.is_alive():
-    st.session_state.training_state = _active_ts
-    st.session_state.training_thread = _active_thread
+if st.session_state.training_thread is None and _mgr.thread is not None and _mgr.thread.is_alive():
+    st.session_state.training_state = _mgr.ts
+    st.session_state.training_thread = _mgr.thread
 
 
 # ---------------------------------------------------------------------------
@@ -73,20 +79,19 @@ if _active_thread is not None and _active_thread.is_alive():
 
 
 def _is_training() -> bool:
-    return _active_thread is not None and _active_thread.is_alive()
+    thread = st.session_state.training_thread
+    return thread is not None and thread.is_alive()
 
 
 def _start_training(config_path: str, continue_from: str | None) -> None:
-    global _active_ts, _active_thread  # noqa: PLW0603
-
-    # Stop any zombie thread from a previous session before starting a new one.
-    if _active_thread is not None and _active_thread.is_alive():
-        if _active_ts is not None:
-            _active_ts.stop_requested = True
-        _active_thread.join(timeout=10)
+    # Stop any zombie thread that survived a page refresh.
+    if _mgr.thread is not None and _mgr.thread.is_alive():
+        if _mgr.ts is not None:
+            _mgr.ts.stop_requested = True
+        _mgr.thread.join(timeout=10)
 
     ts = TrainingState()
-    _active_ts = ts
+    _mgr.ts = ts
     st.session_state.training_state = ts
 
     def _run() -> None:
@@ -101,7 +106,7 @@ def _start_training(config_path: str, continue_from: str | None) -> None:
             ts.error_msg = str(exc)
 
     thread = threading.Thread(target=_run, daemon=True)
-    _active_thread = thread
+    _mgr.thread = thread
     st.session_state.training_thread = thread
     thread.start()
 
@@ -175,8 +180,8 @@ with tab_train:
     t_title_col, t_exit_col = st.columns([5, 1])
     t_title_col.title("Train Agent")
     train_exit_btn = t_exit_col.button("Exit / Stop", key="train_exit", width="stretch")
-    if train_exit_btn and _active_ts is not None:
-        _active_ts.stop_requested = True
+    if train_exit_btn and _mgr.ts is not None:
+        _mgr.ts.stop_requested = True
         st.rerun()
 
     # Status + progress
@@ -246,8 +251,8 @@ with tab_train:
     # Single toggle button: Start Training ↔ Stop Training
     if _is_training():
         if st.button("Stop Training", width="stretch"):
-            if _active_ts is not None:
-                _active_ts.stop_requested = True
+            if _mgr.ts is not None:
+                _mgr.ts.stop_requested = True
             st.rerun()
     else:
         if st.button("Start Training", width="stretch"):
