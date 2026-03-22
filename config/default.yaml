@@ -1,6 +1,6 @@
 training:
   total_timesteps: 5_000_000
-  render_every_n_episodes: 2   # 0 or -1 = fully headless; 1 = every episode
+  render_every_n_episodes: 24   # 0 or -1 = fully headless; 1 = every episode
   n_envs: 4
   save_path: "models/"
   model_name: "snake_ppo"
