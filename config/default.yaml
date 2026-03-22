@@ -20,8 +20,8 @@ env:
   max_steps: 500
 
 reward:
-  food: 16.0       # reward for eating food
-  collision: -8.0  # penalty for hitting a wall or the snake's own body
+  food: 64.0       # reward for eating food
+  collision: -16.0  # penalty for hitting a wall or the snake's own body
   toward: 0.5      # reward per step that moves closer to food (Manhattan distance)
   away: -0.5       # penalty per step that moves away from food
 
