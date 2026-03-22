@@ -288,6 +288,7 @@ def train(
                 batch_size=ppo_cfg["batch_size"],
                 n_epochs=ppo_cfg["n_epochs"],
                 gamma=ppo_cfg["gamma"],
+                gae_lambda=ppo_cfg.get("gae_lambda", 0.95),
                 clip_range=ppo_cfg["clip_range"],
                 ent_coef=ppo_cfg["ent_coef"],
                 policy_kwargs=policy_kwargs,

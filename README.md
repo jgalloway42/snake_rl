@@ -149,15 +149,18 @@ All reward weights are in `config/default.yaml` under the `reward` key — no co
 
 ```yaml
 reward:
-  food: 10.0        # reward for eating food
-  collision: -10.0  # penalty for hitting a wall or the snake's own body
+  food: 64.0        # reward for eating food
+  collision: -16.0  # penalty for hitting a wall or the snake's own body
   toward: 0.1       # reward per step moving closer to food (Manhattan distance)
-  away: -0.3        # penalty per step moving away from food
+  away: -0.05       # penalty per step moving away from food
 ```
 
-- Increase the food reward relative to collision penalty to encourage risk-taking.
-- Reduce or remove the Manhattan distance shaping (`toward`/`away`) once the agent starts finding food reliably — it can discourage longer paths that eventually reach food.
-- Add a small survival bonus to encourage longer episodes (requires a code change to `env.py`).
+**Critical:** `toward` must be non-zero. Setting `toward: 0.0` removes all per-step positive signal — the only reward becomes eating food, which is too sparse to learn from reliably on a 24×24 grid. Agents trained this way never achieve positive mean rewards even after millions of steps.
+
+Guidelines for tuning:
+- Keep `toward` small relative to `food` (~0.1–0.5% of food reward). Too large and the agent learns to spiral toward food instead of planning ahead.
+- Keep `away` small and negative (-0.05 to -0.1). A large penalty (e.g., -0.5) over-punishes normal exploration and makes the reward signal noisy.
+- Once the agent reliably eats food, reduce or remove distance shaping — it can penalise longer paths that ultimately reach food.
 
 **4. Curriculum: start on a smaller grid**
 
@@ -175,6 +178,52 @@ Load the small-grid checkpoint and continue training on the full 24×24 grid. Th
 **5. Swap to a CNN policy**
 
 The current MLP flattens the 3-channel spatial observation. A CNN can exploit the 2-D structure. To switch, replace `SnakeMLP` in `policy.py` with a `NatureCNN`-style extractor and update the `policy_kwargs` in `train.py`. No changes to the environment are needed — the `(3, H, W)` observation shape is already CNN-friendly.
+
+---
+
+## Convergence troubleshooting
+
+Training metrics are logged to MLflow every rollout (~8k steps with 4 envs × 2048 n_steps). Query the DB directly to diagnose issues:
+
+```python
+import sqlite3, pandas as pd
+
+conn = sqlite3.connect("mlruns/mlflow.db")
+runs = pd.read_sql("SELECT run_uuid, status, start_time FROM runs ORDER BY start_time DESC", conn)
+
+# Latest metrics for the most recent run
+run_id = runs.iloc[0]["run_uuid"]
+metrics = pd.read_sql(
+    "SELECT key, value, step FROM metrics WHERE run_uuid=? ORDER BY step",
+    conn, params=(run_id,)
+).pivot_table(index="step", columns="key", values="value", aggfunc="last")
+```
+
+**Common failure patterns:**
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `ep_rew_mean` never turns positive | `reward.toward = 0` — reward too sparse | Set `toward: 0.1` |
+| `ep_rew_mean` positive early then plateaus | Entropy collapsed; agent stuck in local optimum | Increase `ent_coef` (0.01 → 0.02) |
+| `ep_len_mean` very short (~74 steps) | Agent dies frequently; not navigating toward food | Check `toward` reward is non-zero |
+| `value_loss` high and volatile (>30) | Reward signal inconsistent; critic can't track | Reduce `away` magnitude; ensure `toward > 0` |
+| `clip_fraction` consistently > 0.25 | Policy updates too large | Reduce `learning_rate` or `clip_range` |
+| `approx_kl` > 0.03 | Policy shifting too fast per update | Reduce `n_epochs` or `learning_rate` |
+| `entropy` collapses below -1.05 early | Exploration gone; agent in premature local optimum | Increase `ent_coef` (0.01 → 0.02) |
+| Multiple RUNNING runs in MLflow | Streamlit training threads not stopped on tab close | Manually stop via the Stop button before refreshing |
+
+**PPO parameter reference:**
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `learning_rate` | 0.0003 | Adam step size; standard starting point, decay if plateauing |
+| `n_steps` | 2048 | Steps per env per rollout; larger = lower variance, slower updates |
+| `batch_size` | 64 | Mini-batch size for gradient steps |
+| `n_epochs` | 10 | Gradient passes over each rollout buffer |
+| `gamma` | 0.99 | Discount factor; keep high for long-horizon survival tasks |
+| `gae_lambda` | 0.95 | Advantage estimation bias/variance tradeoff (SB3 default) |
+| `clip_range` | 0.2 | Limits policy change per update; 0.2 is the standard PPO value |
+| `ent_coef` | 0.02 | Entropy bonus; prevents premature convergence to suboptimal policies |
 
 ---
 
