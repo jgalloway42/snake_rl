@@ -13,7 +13,7 @@ ppo:
   gamma: 0.99            # discount factor; high value preserves long-term survival incentive
   gae_lambda: 0.95       # bias-variance tradeoff for advantage estimation (SB3 default)
   clip_range: 0.2        # limits how much the policy can change per update (standard PPO)
-  ent_coef: 0.02         # entropy bonus; higher value slows entropy collapse / keeps exploration
+  ent_coef: 0.05         # entropy bonus; higher value slows entropy collapse / keeps exploration
 
 env:
   grid_w: 24
@@ -22,7 +22,7 @@ env:
 
 reward:
   food: 64.0        # reward for eating food
-  collision: -16.0  # penalty for hitting a wall or the snake's own body
+  collision: -8.0   # penalty for hitting a wall or the snake's own body
   toward: 0.1       # reward per step that moves closer to food (~0.16% of food reward)
   away: -0.05       # penalty per step that moves away from food (reduced from -0.5)
 

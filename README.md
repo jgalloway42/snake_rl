@@ -134,6 +134,8 @@ The default config trains for 5M timesteps on a 24×24 grid — a reasonable sta
 
 Training saves `models/snake_ppo.zip` after each run. In the Streamlit Train tab, paste the path into "Continue from model" to pick up where you left off. Equivalent CLI flag: `--config config/default.yaml` (training auto-saves; re-run `make train` after loading the checkpoint manually via `PPO.load()`).
 
+> **Note:** `continue_from` preserves the model's saved parameters exactly. Config changes (`ent_coef`, reward weights, etc.) only take effect on a **fresh** training run — they are ignored when continuing from a checkpoint.
+
 **2. Longer runs**
 
 Increase `training.total_timesteps` in `config/default.yaml`. Snake is a hard exploration problem — agents often don't start consistently finding food until ~500k steps, and don't chain multiple food items until 2M+.
