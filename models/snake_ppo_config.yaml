@@ -1,6 +1,6 @@
 training:
   total_timesteps: 5_000_000
-  render_every_n_episodes: 24   # 0 or -1 = fully headless; 1 = every episode
+  render_every_n_episodes: 1   # 0 or -1 = fully headless; 1 = every episode
   n_envs: 4
   save_path: "models/"
   model_name: "snake_ppo"
@@ -20,7 +20,7 @@ env:
   max_steps: 500
 
 reward:
-  food: 32.0       # reward for eating food
+  food: 64.0       # reward for eating food
   collision: -16.0  # penalty for hitting a wall or the snake's own body
   toward: 0.5      # reward per step that moves closer to food (Manhattan distance)
   away: -0.5       # penalty per step that moves away from food
@@ -31,4 +31,4 @@ policy:
 
 mlflow:
   experiment_name: "snake-rl"
-  tracking_uri: "mlruns"
+  tracking_uri: "sqlite:///mlruns/mlflow.db"
