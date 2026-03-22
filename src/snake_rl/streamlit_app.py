@@ -66,6 +66,8 @@ if "play_info" not in st.session_state:
     st.session_state.play_info = {}
 if "play_rewards" not in st.session_state:
     st.session_state.play_rewards = []  # cumulative reward trace for current episode
+if "exit_requested" not in st.session_state:
+    st.session_state.exit_requested = False
 
 # Reconnect to any training thread that survived a page refresh.
 if st.session_state.training_thread is None and _mgr.thread is not None and _mgr.thread.is_alive():
@@ -180,8 +182,10 @@ with tab_train:
     t_title_col, t_exit_col = st.columns([5, 1])
     t_title_col.title("Train Agent")
     train_exit_btn = t_exit_col.button("Exit / Stop", key="train_exit", width="stretch")
-    if train_exit_btn and _mgr.ts is not None:
-        _mgr.ts.stop_requested = True
+    if train_exit_btn:
+        if _mgr.ts is not None:
+            _mgr.ts.stop_requested = True
+        st.session_state.exit_requested = True
         st.rerun()
 
     # Status + progress
@@ -248,8 +252,14 @@ with tab_train:
         key="t_continue",
     )
 
-    # Single toggle button: Start Training ↔ Stop Training
-    if _is_training():
+    # Single toggle button: Start Training ↔ Stop Training ↔ Stopping...
+    stopping = _is_training() and _mgr.ts is not None and _mgr.ts.stop_requested
+    if stopping:
+        if st.session_state.exit_requested:
+            st.button("Stopping — will exit when done...", disabled=True, width="stretch")
+        else:
+            st.button("Stopping...", disabled=True, width="stretch")
+    elif _is_training():
         if st.button("Stop Training", width="stretch"):
             if _mgr.ts is not None:
                 _mgr.ts.stop_requested = True
@@ -354,10 +364,13 @@ with tab_train:
     except (FileNotFoundError, TypeError):
         pass  # config path not yet valid — silently skip
 
-    # Auto-refresh while training
+    # Auto-refresh while training; exit cleanly once thread finishes
     if _is_training():
         time.sleep(0.1)
         st.rerun()
+    elif st.session_state.exit_requested:
+        import os  # pylint: disable=import-outside-toplevel
+        os._exit(0)
 
 
 # ===========================================================================
