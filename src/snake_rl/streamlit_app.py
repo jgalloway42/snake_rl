@@ -23,6 +23,14 @@ from snake_rl.train import train as run_training
 
 st.set_page_config(page_title="snake-rl", layout="wide")
 
+# ---------------------------------------------------------------------------
+# Module-level training state — persists across Streamlit reruns AND page
+# refreshes (session_state is reset on refresh; module globals are not).
+# ---------------------------------------------------------------------------
+
+_active_ts: TrainingState | None = None
+_active_thread: threading.Thread | None = None
+
 
 # ---------------------------------------------------------------------------
 # Session state initialisation
@@ -50,6 +58,11 @@ if "play_info" not in st.session_state:
 if "play_rewards" not in st.session_state:
     st.session_state.play_rewards = []  # cumulative reward trace for current episode
 
+# Reconnect to any training thread that survived a page refresh.
+if _active_thread is not None and _active_thread.is_alive():
+    st.session_state.training_state = _active_ts
+    st.session_state.training_thread = _active_thread
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -57,12 +70,20 @@ if "play_rewards" not in st.session_state:
 
 
 def _is_training() -> bool:
-    thread = st.session_state.training_thread
-    return thread is not None and thread.is_alive()
+    return _active_thread is not None and _active_thread.is_alive()
 
 
 def _start_training(config_path: str, continue_from: str | None) -> None:
+    global _active_ts, _active_thread  # noqa: PLW0603
+
+    # Stop any zombie thread from a previous session before starting a new one.
+    if _active_thread is not None and _active_thread.is_alive():
+        if _active_ts is not None:
+            _active_ts.stop_requested = True
+        _active_thread.join(timeout=10)
+
     ts = TrainingState()
+    _active_ts = ts
     st.session_state.training_state = ts
 
     def _run() -> None:
@@ -77,6 +98,7 @@ def _start_training(config_path: str, continue_from: str | None) -> None:
             ts.error_msg = str(exc)
 
     thread = threading.Thread(target=_run, daemon=True)
+    _active_thread = thread
     st.session_state.training_thread = thread
     thread.start()
 
@@ -150,8 +172,9 @@ with tab_train:
     t_title_col, t_exit_col = st.columns([5, 1])
     t_title_col.title("Train Agent")
     train_exit_btn = t_exit_col.button("Exit / Stop", key="train_exit", width="stretch")
-    if train_exit_btn and st.session_state.training_state is not None:
-        st.session_state.training_state.stop_requested = True
+    if train_exit_btn and _active_ts is not None:
+        _active_ts.stop_requested = True
+        st.rerun()
 
     # Status + progress
     state: TrainingState | None = st.session_state.training_state
@@ -220,8 +243,9 @@ with tab_train:
     # Single toggle button: Start Training ↔ Stop Training
     if _is_training():
         if st.button("Stop Training", width="stretch"):
-            if st.session_state.training_state is not None:
-                st.session_state.training_state.stop_requested = True
+            if _active_ts is not None:
+                _active_ts.stop_requested = True
+            st.rerun()
     else:
         if st.button("Start Training", width="stretch"):
             _start_training(t_config_path, t_continue_from or None)

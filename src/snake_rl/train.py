@@ -304,22 +304,25 @@ def train(
         if training_state is not None:
             callbacks.append(StopCallback(training_state))
 
-        model.learn(
-            total_timesteps=train_cfg["total_timesteps"],
-            callback=callbacks,
-        )
-
-        if training_state is not None:
-            training_state.status = (
-                "stopped" if training_state.stop_requested else "done"
-            )
-
         save_dir = Path(train_cfg["save_path"])
         save_dir.mkdir(parents=True, exist_ok=True)
         model_path = save_dir / train_cfg["model_name"]
-        model.save(str(model_path))
         config_save_path = save_dir / f"{train_cfg['model_name']}_config.yaml"
-        shutil.copy(config_path, config_save_path)
+
+        try:
+            model.learn(
+                total_timesteps=train_cfg["total_timesteps"],
+                callback=callbacks,
+            )
+        finally:
+            # Save model and config regardless of how training ended (normal
+            # completion, Stop button, or unexpected exception).
+            if training_state is not None:
+                training_state.status = (
+                    "stopped" if training_state.stop_requested else "done"
+                )
+            model.save(str(model_path))
+            shutil.copy(config_path, config_save_path)
 
         mlflow.log_artifact(str(model_path) + ".zip")
         mlflow.log_artifact(str(config_save_path))
