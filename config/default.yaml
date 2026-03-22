@@ -6,7 +6,7 @@ training:
   model_name: "snake_ppo"
 
 ppo:
-  learning_rate: 0.0003  # standard starting point; can be decayed if reward plateaus
+  learning_rate: 0.0001  # lowered from 0.0003; slower updates give value function more time to fit
   n_steps: 2048          # steps collected per env per rollout; larger = lower variance
   batch_size: 64         # samples per gradient step
   n_epochs: 10           # gradient passes over each rollout buffer
@@ -16,15 +16,15 @@ ppo:
   ent_coef: 0.05         # entropy bonus; higher value slows entropy collapse / keeps exploration
 
 env:
-  grid_w: 24
-  grid_h: 24
-  max_steps: 500
+  grid_w: 16
+  grid_h: 16
+  max_steps: 300
 
 reward:
   food: 64.0        # reward for eating food
   collision: -8.0   # penalty for hitting a wall or the snake's own body
-  toward: 0.1       # reward per step that moves closer to food (~0.16% of food reward)
-  away: -0.05       # penalty per step that moves away from food (reduced from -0.5)
+  toward: 0.01      # reduced from 0.1; food (64) now dominates over shaping signal
+  away: -0.02       # scaled proportionally to toward (2:1 ratio)
 
 policy:
   features_dim: 64
