@@ -5,7 +5,7 @@ All hyperparameters come from config/default.yaml — nothing is hardcoded here.
 
 from __future__ import annotations
 
-import copy
+import io
 import shutil
 import threading
 from pathlib import Path
@@ -158,7 +158,10 @@ class RenderCallback(BaseCallback):
                             self._render_thread is None
                             or not self._render_thread.is_alive()
                         ):
-                            model_snapshot = copy.deepcopy(self.model)
+                            buf = io.BytesIO()
+                            self.model.save(buf)
+                            buf.seek(0)
+                            model_snapshot = PPO.load(buf)
                             self._render_thread = threading.Thread(
                                 target=self._run_headless_episode,
                                 args=(model_snapshot,),

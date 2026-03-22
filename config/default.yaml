@@ -31,4 +31,4 @@ policy:
 
 mlflow:
   experiment_name: "snake-rl"
-  tracking_uri: "mlruns"
+  tracking_uri: "sqlite:///mlruns/mlflow.db"
