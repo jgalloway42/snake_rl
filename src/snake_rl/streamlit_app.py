@@ -70,7 +70,11 @@ if "exit_requested" not in st.session_state:
     st.session_state.exit_requested = False
 
 # Reconnect to any training thread that survived a page refresh.
-if st.session_state.training_thread is None and _mgr.thread is not None and _mgr.thread.is_alive():
+if (
+    st.session_state.training_thread is None
+    and _mgr.thread is not None
+    and _mgr.thread.is_alive()
+):
     st.session_state.training_state = _mgr.ts
     st.session_state.training_thread = _mgr.thread
 
@@ -256,7 +260,9 @@ with tab_train:
     stopping = _is_training() and _mgr.ts is not None and _mgr.ts.stop_requested
     if stopping:
         if st.session_state.exit_requested:
-            st.button("Stopping — will exit when done...", disabled=True, width="stretch")
+            st.button(
+                "Stopping — will exit when done...", disabled=True, width="stretch"
+            )
         else:
             st.button("Stopping...", disabled=True, width="stretch")
     elif _is_training():
@@ -370,6 +376,7 @@ with tab_train:
         st.rerun()
     elif st.session_state.exit_requested:
         import os  # pylint: disable=import-outside-toplevel
+
         os._exit(0)
 
 
