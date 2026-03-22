@@ -5,6 +5,7 @@ All hyperparameters come from config/default.yaml — nothing is hardcoded here.
 
 from __future__ import annotations
 
+import copy
 import shutil
 import threading
 from pathlib import Path
@@ -157,8 +158,11 @@ class RenderCallback(BaseCallback):
                             self._render_thread is None
                             or not self._render_thread.is_alive()
                         ):
+                            model_snapshot = copy.deepcopy(self.model)
                             self._render_thread = threading.Thread(
-                                target=self._run_headless_episode, daemon=True
+                                target=self._run_headless_episode,
+                                args=(model_snapshot,),
+                                daemon=True,
                             )
                             self._render_thread.start()
                     else:
@@ -180,7 +184,7 @@ class RenderCallback(BaseCallback):
                 return
         # Leave window open — last frame stays visible until the next episode
 
-    def _run_headless_episode(self) -> None:
+    def _run_headless_episode(self, model) -> None:
         import time  # pylint: disable=import-outside-toplevel
 
         env = SnakeEnv(**self.env_kwargs, render_mode="rgb_array")
@@ -190,7 +194,7 @@ class RenderCallback(BaseCallback):
             frame = env.render()
             if frame is not None and self.training_state is not None:
                 self.training_state.latest_frame = frame
-            action, _ = self.model.predict(obs, deterministic=True)
+            action, _ = model.predict(obs, deterministic=True)
             obs, _, terminated, truncated, _ = env.step(int(action))
             done = terminated or truncated
             time.sleep(0.05)
