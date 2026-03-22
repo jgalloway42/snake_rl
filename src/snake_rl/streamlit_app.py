@@ -155,12 +155,66 @@ with tab_train:
     if train_exit_btn and st.session_state.training_state is not None:
         st.session_state.training_state.stop_requested = True
 
+    # Status + progress
+    state: TrainingState | None = st.session_state.training_state
+    if state is not None:
+        status_colors = {
+            "idle": "gray",
+            "training": "green",
+            "done": "blue",
+            "stopped": "orange",
+            "error": "red",
+        }
+        color = status_colors.get(state.status, "gray")
+        st.markdown(f"**Status:** :{color}[{state.status.upper()}]")
+        if state.status == "error":
+            st.error(state.error_msg)
+        if state.total_timesteps > 0:
+            progress = min(state.current_timesteps / state.total_timesteps, 1.0)
+            st.progress(
+                progress,
+                text=f"{state.current_timesteps:,} / {state.total_timesteps:,} steps",
+            )
+
+    # STABLE 2-COLUMN LAYOUT — always rendered so structure never shifts on rerun
+    t_left, t_right = st.columns([1, 2])
+
+    with t_left:
+        st.subheader("Live Preview")
+        if state is not None and state.latest_frame is not None:
+            st.image(state.latest_frame, channels="RGB", use_container_width=True)
+        else:
+            st.caption("Waiting for first render episode...")
+
+    with t_right:
+        st.subheader("Training Metrics")
+        chart_configs = [
+            ("Episode Reward", "ep_rew_mean"),
+            ("Value Loss", "value_loss"),
+            ("Policy Loss", "policy_loss"),
+            ("Episode Length", "ep_len_mean"),
+            ("Entropy", "entropy"),
+            ("KL Divergence", "approx_kl"),
+        ]
+        metrics = state.get_metrics_snapshot() if state is not None else []
+        row1 = st.columns(3)
+        row2 = st.columns(3)
+        for chart_col, (title, mkey) in zip(row1 + row2, chart_configs):
+            chart_col.caption(title)
+            chart_df = _make_chart_df(metrics, mkey) if metrics else None
+            if chart_df is not None:
+                chart_col.line_chart(chart_df, height=150)
+            else:
+                chart_col.markdown("&nbsp;")  # stable placeholder — keeps column height
+
+    st.markdown("---")
+
     # Config inputs — stacked full-width
     t_config_path = st.text_input(
         "Config YAML", value="config/default.yaml", key="t_config"
     )
     t_continue_from = st.text_input(
-        "Continue from model (opt, optional)",
+        "Continue from model (optional)",
         value="models/snake_ppo.zip",
         key="t_continue",
     )
@@ -269,58 +323,6 @@ with tab_train:
             )
     except (FileNotFoundError, TypeError):
         pass  # config path not yet valid — silently skip
-
-    # Status + progress — small, below the button
-    state: TrainingState | None = st.session_state.training_state
-    if state is not None:
-        status_colors = {
-            "idle": "gray",
-            "training": "green",
-            "done": "blue",
-            "stopped": "orange",
-            "error": "red",
-        }
-        color = status_colors.get(state.status, "gray")
-        st.markdown(f"**Status:** :{color}[{state.status.upper()}]")
-        if state.status == "error":
-            st.error(state.error_msg)
-        if state.total_timesteps > 0:
-            progress = min(state.current_timesteps / state.total_timesteps, 1.0)
-            st.progress(
-                progress,
-                text=f"{state.current_timesteps:,} / {state.total_timesteps:,} steps",
-            )
-
-    # STABLE 2-COLUMN LAYOUT — always rendered so structure never shifts on rerun
-    t_left, t_right = st.columns([1, 2])
-
-    with t_left:
-        st.subheader("Live Preview")
-        if state is not None and state.latest_frame is not None:
-            st.image(state.latest_frame, channels="RGB", use_container_width=True)
-        else:
-            st.caption("Waiting for first render episode...")
-
-    with t_right:
-        st.subheader("Training Metrics")
-        chart_configs = [
-            ("Episode Reward", "ep_rew_mean"),
-            ("Value Loss", "value_loss"),
-            ("Policy Loss", "policy_loss"),
-            ("Episode Length", "ep_len_mean"),
-            ("Entropy", "entropy"),
-            ("KL Divergence", "approx_kl"),
-        ]
-        metrics = state.get_metrics_snapshot() if state is not None else []
-        row1 = st.columns(3)
-        row2 = st.columns(3)
-        for chart_col, (title, mkey) in zip(row1 + row2, chart_configs):
-            chart_col.caption(title)
-            chart_df = _make_chart_df(metrics, mkey) if metrics else None
-            if chart_df is not None:
-                chart_col.line_chart(chart_df, height=150)
-            else:
-                chart_col.markdown("&nbsp;")  # stable placeholder — keeps column height
 
     # Auto-refresh while training
     if _is_training():

@@ -16,6 +16,7 @@ import yaml
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.utils import safe_mean
 
 from snake_rl.env import SnakeEnv
 from snake_rl.policy import SnakeMLP
@@ -55,9 +56,10 @@ class TrainingState:
 class MLflowCallback(BaseCallback):
     """Log SB3 rollout/train metrics to MLflow and optionally to TrainingState."""
 
+    # ep_rew_mean / ep_len_mean are logged by PPO *after* _on_rollout_end fires,
+    # so they are not yet in logger.name_to_value at callback time — read them
+    # directly from model.ep_info_buffer instead (see _on_rollout_end).
     _SB3_KEYS: dict[str, str] = {
-        "ep_rew_mean": "rollout/ep_rew_mean",
-        "ep_len_mean": "rollout/ep_len_mean",
         "value_loss": "train/value_loss",
         "policy_loss": "train/policy_gradient_loss",
         "entropy": "train/entropy_loss",
@@ -85,6 +87,13 @@ class MLflowCallback(BaseCallback):
                 val = float(self.logger.name_to_value[sb3_key])
                 entry[key] = val
                 mlflow.log_metric(key, val, step=self.num_timesteps)
+        if len(self.model.ep_info_buffer) > 0:
+            ep_rew = float(safe_mean([ep["r"] for ep in self.model.ep_info_buffer]))
+            ep_len = float(safe_mean([ep["l"] for ep in self.model.ep_info_buffer]))
+            entry["ep_rew_mean"] = ep_rew
+            entry["ep_len_mean"] = ep_len
+            mlflow.log_metric("ep_rew_mean", ep_rew, step=self.num_timesteps)
+            mlflow.log_metric("ep_len_mean", ep_len, step=self.num_timesteps)
         if self.training_state is not None and len(entry) > 1:
             self.training_state.append_metrics(entry)
 
