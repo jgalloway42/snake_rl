@@ -13,7 +13,7 @@ ppo:
   gamma: 0.99            # discount factor; high value preserves long-term survival incentive
   gae_lambda: 0.95       # bias-variance tradeoff for advantage estimation (SB3 default)
   clip_range: 0.2        # limits how much the policy can change per update (standard PPO)
-  ent_coef: 0.10         # raised from 0.05; prevents entropy collapse before food is discovered
+  ent_coef: 0.02         # lowered from 0.10; slows collapse without dominating policy gradient
 
 env:
   grid_w: 16
@@ -23,8 +23,8 @@ env:
 reward:
   food: 16.0        # scaled down 4× from 64; reduces value-function variance (MSE loss scales with food²)
   collision: -2.0   # scaled down 4× from -8; maintains 8:1 food:collision ratio; cheaper death = more early exploration
-  toward: 0.01      # tiny shaping signal (~6% of food reward); food still dominates
-  away: -0.02  # scaled proportionally to toward (2:1 ratio)
+  toward: 0.0       # removed shaping; food is the only positive signal
+  away: 0.0         # removed shaping; forces agent to learn from food reward alone  # scaled proportionally to toward (2:1 ratio)
 
 policy:
   features_dim: 64
