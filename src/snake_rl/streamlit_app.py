@@ -119,7 +119,11 @@ def _start_training(config_path: str, continue_from: str | None) -> None:
 
 def _start_play_episode() -> None:
     """Open a new env and store it in session state for step-by-step playback."""
-    play_env = SnakeEnv(render_mode="rgb_array")
+    # Derive grid size from the model's observation space so the env always
+    # matches the model, regardless of what config was used to train it.
+    # obs shape is (3, total_h, total_w); SnakeEnv expects playable dims (total - 2).
+    _, total_h, total_w = st.session_state.model.observation_space.shape
+    play_env = SnakeEnv(grid_w=total_w - 2, grid_h=total_h - 2, render_mode="rgb_array")
     play_obs, _ = play_env.reset()
     st.session_state.play_env = play_env
     st.session_state.play_obs = play_obs
