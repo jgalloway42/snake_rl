@@ -27,8 +27,11 @@ class SnakeEnv(gym.Env):
         away_penalty: float = -0.3,
     ) -> None:
         super().__init__()
-        self.grid_w = grid_w
-        self.grid_h = grid_h
+        # grid_w/grid_h from config are the *playable* interior dimensions.
+        # Internally we add a 1-cell border on each side, so the total grid
+        # (including walls) is (grid_w + 2) × (grid_h + 2).
+        self.grid_w = grid_w + 2
+        self.grid_h = grid_h + 2
         self.max_steps = max_steps
         self.render_mode = render_mode
         self.food_reward = food_reward
@@ -39,7 +42,7 @@ class SnakeEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=0.0,
             high=1.0,
-            shape=(3, grid_h, grid_w),
+            shape=(3, self.grid_h, self.grid_w),
             dtype=np.float32,
         )
         self.action_space = spaces.Discrete(3)

@@ -26,7 +26,11 @@ class TestObservationShape:
     def test_reset_obs_shape(self):
         env = make_env()
         obs, _ = env.reset()
-        assert obs.shape == (3, 8, 8)
+        assert obs.shape == (
+            3,
+            10,
+            10,
+        )  # grid_w=8 playable → 10×10 total (+ 1-cell border each side)
 
     def test_reset_obs_dtype(self):
         env = make_env()
@@ -37,7 +41,7 @@ class TestObservationShape:
         env = make_env()
         env.reset()
         obs, *_ = env.step(Action.STRAIGHT)
-        assert obs.shape == (3, 8, 8)
+        assert obs.shape == (3, 10, 10)  # grid_w=8 playable → 10×10 total
 
     def test_step_obs_dtype(self):
         env = make_env()
