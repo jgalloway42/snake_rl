@@ -57,15 +57,6 @@ if "training_state" not in st.session_state:
     st.session_state.training_state = None
 if "training_thread" not in st.session_state:
     st.session_state.training_thread = None
-# Play tab: persistent env across reruns so each rerun does one step
-if "play_env" not in st.session_state:
-    st.session_state.play_env = None
-if "play_obs" not in st.session_state:
-    st.session_state.play_obs = None
-if "play_info" not in st.session_state:
-    st.session_state.play_info = {}
-if "play_rewards" not in st.session_state:
-    st.session_state.play_rewards = []  # cumulative reward trace for current episode
 if "exit_requested" not in st.session_state:
     st.session_state.exit_requested = False
 
@@ -117,39 +108,8 @@ def _start_training(config_path: str, continue_from: str | None) -> None:
     thread.start()
 
 
-def _start_play_episode() -> None:
-    """Open a new env and store it in session state for step-by-step playback."""
-    # Derive grid size from the model's observation space so the env always
-    # matches the model, regardless of what config was used to train it.
-    # obs shape is (3, total_h, total_w); SnakeEnv expects playable dims (total - 2).
-    _, total_h, total_w = st.session_state.model.observation_space.shape
-    play_env = SnakeEnv(grid_w=total_w - 2, grid_h=total_h - 2, render_mode="rgb_array")
-    play_obs, _ = play_env.reset()
-    st.session_state.play_env = play_env
-    st.session_state.play_obs = play_obs
-    st.session_state.play_info = {}
-    st.session_state.play_rewards = []
-
-
-def _stop_play_episode() -> None:
-    """Close the active env and clear play state."""
-    if st.session_state.play_env is not None:
-        st.session_state.play_env.close()
-    st.session_state.play_env = None
-    st.session_state.play_obs = None
-    st.session_state.play_info = {}
-    st.session_state.play_rewards = []
-
-
 def _on_play_exit() -> None:
-    """on_click callback for the Exit button — runs before widgets re-render.
-
-    Streamlit forbids modifying a keyed widget's session state key after the
-    widget is instantiated in the same script run.  Using on_click sidesteps
-    this: the callback executes before the next render, so the toggle's bound
-    key can be safely reset here.
-    """
-    _stop_play_episode()
+    """on_click callback for the Exit button."""
     st.session_state.run_continuously = False
 
 
@@ -172,6 +132,19 @@ def _make_chart_df(data: list[dict], metric_key: str) -> pd.DataFrame | None:
     series = pd.Series(list(vals), index=list(steps), name="raw")
     smoothed = series.ewm(alpha=0.3).mean().rename("smoothed")
     return pd.DataFrame({"smoothed": smoothed, "raw": series})
+
+
+def _env_from_model(model) -> SnakeEnv:
+    """Construct a SnakeEnv whose grid matches the model's observation space.
+
+    The obs space is flat: (3 * total_h * total_w + 4,).  Since the grid is
+    always square we can recover total_side = sqrt((obs_size - 4) / 3), then
+    playable_size = total_side - 2 (border cells on each side).
+    """
+    obs_size = model.observation_space.shape[0]
+    total_side = int(((obs_size - 4) / 3) ** 0.5)
+    playable = total_side - 2
+    return SnakeEnv(grid_w=playable, grid_h=playable, render_mode="rgb_array")
 
 
 # ---------------------------------------------------------------------------
@@ -426,66 +399,51 @@ with tab_play:
         p_summary_ph = st.empty()
 
         p_col1, p_col2, p_col3 = st.columns(3)
-        episode_active = st.session_state.play_env is not None
         run_episode_btn = p_col1.button(
             "Run Episode",
-            disabled=st.session_state.model is None or episode_active,
+            disabled=st.session_state.model is None,
         )
-        # key= binds toggle to session_state.run_continuously.
-        # Exit uses on_click=_on_play_exit so the callback resets the key
-        # before the next render (direct assignment after widget creation
-        # raises StreamlitAPIException).
         p_col2.toggle("Run Continuously", key="run_continuously")
         p_col3.button("Exit / Stop", key="play_exit", on_click=_on_play_exit)
 
-        # --- Start a new episode ---
-        if run_episode_btn and st.session_state.model is not None:
-            _start_play_episode()
-            st.rerun()
-
-        if (
-            st.session_state.run_continuously
-            and st.session_state.model is not None
-            and not episode_active
-        ):
-            _start_play_episode()
-            st.rerun()
-
-        # Reward chart placeholder (shown below the board)
         reward_chart_ph = st.empty()
 
-        # --- Advance one step in the active episode ---
-        if episode_active and st.session_state.model is not None:
-            env = st.session_state.play_env
-            obs = st.session_state.play_obs
+        # --- Run a full episode in one blocking loop ---
+        # Updating st.empty() placeholders in-place avoids a full page rerun
+        # per frame, eliminating the ~100-300ms rerun overhead that caused
+        # frame dropping with the previous step-per-rerun design.
+        should_run = run_episode_btn or (
+            st.session_state.run_continuously and st.session_state.model is not None
+        )
+        if should_run and st.session_state.model is not None:
+            env = _env_from_model(st.session_state.model)
+            obs, _ = env.reset()
+            frame_delay = 1.0 / render_fps
+            rewards: list[float] = []
 
-            frame = env.render()
-            if frame is not None:
-                p_frame_ph.image(frame, channels="RGB", width=480)
+            while True:
+                frame = env.render()
+                if frame is not None:
+                    p_frame_ph.image(frame, channels="RGB", width=480)
 
-            action, _ = st.session_state.model.predict(obs, deterministic=True)
-            obs, reward, terminated, truncated, info = env.step(int(action))
-            st.session_state.play_obs = obs
-            st.session_state.play_info = info
-            st.session_state.play_rewards.append(float(reward))
+                action, _ = st.session_state.model.predict(obs, deterministic=True)
+                obs, reward, terminated, truncated, info = env.step(int(action))
+                rewards.append(float(reward))
 
-            p_score_ph.markdown(
-                f"**Score:** {info['score']}  |  **Steps:** {info['steps']}"
-            )
+                p_score_ph.markdown(
+                    f"**Score:** {info['score']}  |  **Steps:** {info['steps']}"
+                )
+                reward_chart_ph.line_chart(
+                    pd.DataFrame({"cumulative reward": pd.Series(rewards).cumsum()}),
+                    height=180,
+                )
 
-            if terminated or truncated:
-                _record_result(info["score"], info["steps"], p_summary_ph)
-                _stop_play_episode()
+                time.sleep(frame_delay)
+                if terminated or truncated:
+                    break
 
-        # Draw cumulative reward chart for current (or just-finished) episode
-        if st.session_state.play_rewards:
-            rewards = st.session_state.play_rewards
-            cumulative = pd.Series(rewards).cumsum()
-            reward_chart_ph.line_chart(
-                pd.DataFrame({"cumulative reward": cumulative}),
-                height=180,
-            )
+            env.close()
+            _record_result(info["score"], info["steps"], p_summary_ph)
 
-        if episode_active:
-            time.sleep(1 / render_fps)
-            st.rerun()
+            if st.session_state.run_continuously:
+                st.rerun()
