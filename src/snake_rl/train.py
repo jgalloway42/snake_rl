@@ -66,7 +66,7 @@ class MLflowCallback(BaseCallback):
     # DQN emits these keys into logger.name_to_value during training steps.
     # Keys are only present after learning_starts has been reached.
     _SB3_KEYS: dict[str, str] = {
-        "loss":             "train/loss",
+        "loss": "train/loss",
         "exploration_rate": "train/exploration_rate",
     }
 
