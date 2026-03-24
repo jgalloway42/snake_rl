@@ -214,7 +214,7 @@ class RenderCallback(BaseCallback):
             action, _ = model.predict(obs, deterministic=True)
             obs, _, terminated, truncated, _ = env.step(int(action))
             done = terminated or truncated
-            time.sleep(0.05)
+            time.sleep(0.333)
         # Show the final (collision) frame briefly before the thread exits
         frame = env.render()
         if frame is not None and self.training_state is not None:
