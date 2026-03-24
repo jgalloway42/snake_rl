@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import shutil
+import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ import yaml
 from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.logger import HumanOutputFormat, Logger
 from stable_baselines3.common.utils import safe_mean
 
 from snake_rl.env import SnakeEnv
@@ -38,6 +40,7 @@ class TrainingState:
         self.latest_frame: np.ndarray | None = None
         self.stop_requested: bool = False
         self.error_msg: str = ""
+        self._log_chunks: list[str] = []
         self._lock = threading.Lock()
 
     def append_metrics(self, entry: dict[str, Any]) -> None:
@@ -47,6 +50,20 @@ class TrainingState:
     def get_metrics_snapshot(self) -> list[dict[str, Any]]:
         with self._lock:
             return list(self.metrics)
+
+    def append_log(self, text: str) -> None:
+        with self._lock:
+            self._log_chunks.append(text)
+            # Cap at ~50 KB to bound memory use
+            while (
+                len(self._log_chunks) > 1
+                and sum(len(c) for c in self._log_chunks) > 50_000
+            ):
+                self._log_chunks.pop(0)
+
+    def get_log_snapshot(self) -> str:
+        with self._lock:
+            return "".join(self._log_chunks)
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +246,76 @@ class RenderCallback(BaseCallback):
 
 
 # ---------------------------------------------------------------------------
+# SB3 logger output capture
+# ---------------------------------------------------------------------------
+
+
+class _CapturingStream:
+    """Write-only stream that mirrors SB3 logger output to a TrainingState buffer.
+
+    Passed to ``HumanOutputFormat`` so that SB3's formatted progress tables go
+    to both the real stdout and ``training_state.log_lines`` without touching
+    the global ``sys.stdout``.
+    """
+
+    def __init__(self, training_state: TrainingState) -> None:
+        self._ts = training_state
+        self._stdout = sys.stdout
+
+    def write(self, text: str) -> int:
+        self._stdout.write(text)
+        self._stdout.flush()
+        if text:
+            self._ts.append_log(text)
+        return len(text)
+
+    def flush(self) -> None:
+        self._stdout.flush()
+
+
+# ---------------------------------------------------------------------------
+# Heuristic replay buffer pre-fill
+# ---------------------------------------------------------------------------
+
+
+def prefill_replay_buffer(model: DQN, env_kwargs: dict, n_steps: int) -> None:
+    """Fill model's replay buffer with heuristic-guided transitions.
+
+    Runs a rule-based food-seeking agent for *n_steps* and inserts each
+    (obs, next_obs, action, reward, done) tuple directly into the DQN replay
+    buffer.  This replaces the purely random warm-up phase with higher-quality
+    seed data so learning can begin with a better initial distribution.
+
+    Args:
+        model:      The DQN model whose replay buffer will be pre-filled.
+        env_kwargs: Keyword arguments forwarded to SnakeEnv.
+        n_steps:    Number of transitions to collect.
+    """
+    env = SnakeEnv(**env_kwargs)
+    obs, _ = env.reset()
+
+    for _ in range(n_steps):
+        action = env.get_heuristic_action()
+        next_obs, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+
+        model.replay_buffer.add(
+            obs[np.newaxis],  # (1, obs_dim)
+            next_obs[np.newaxis],  # (1, obs_dim)
+            np.array([[action]]),  # (1, 1)  — Discrete action_dim=1
+            np.array([reward]),  # (1,)
+            np.array([done]),  # (1,)
+            [info],
+        )
+
+        obs = next_obs
+        if done:
+            obs, _ = env.reset()
+
+    env.close()
+
+
+# ---------------------------------------------------------------------------
 # Main training entry point
 # ---------------------------------------------------------------------------
 
@@ -311,6 +398,18 @@ def train(
                 policy_kwargs=policy_kwargs,
                 verbose=1,
             )
+
+        if training_state is not None:
+            capturing_stream = _CapturingStream(training_state)
+            sb3_logger = Logger(
+                folder=None,
+                output_formats=[HumanOutputFormat(capturing_stream)],
+            )
+            model.set_logger(sb3_logger)
+
+        heuristic_steps = dqn_cfg.get("heuristic_prefill_steps", 0)
+        if heuristic_steps > 0 and not continue_from:
+            prefill_replay_buffer(model, env_kwargs, heuristic_steps)
 
         callbacks = [MLflowCallback(training_state=training_state)]
         render_every = train_cfg.get("render_every_n_episodes", 0)

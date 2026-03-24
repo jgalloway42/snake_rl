@@ -325,3 +325,21 @@ class TestRenderingPaths:
         env = make_env()
         env.reset()
         assert env.handle_events() is True
+
+
+# ---------------------------------------------------------------------------
+# Heuristic action via env
+# ---------------------------------------------------------------------------
+
+
+class TestGetHeuristicAction:
+    def test_returns_valid_action(self):
+        env = make_env()
+        env.reset()
+        result = env.get_heuristic_action()
+        assert result in (Action.STRAIGHT, Action.TURN_LEFT, Action.TURN_RIGHT)
+
+    def test_raises_before_reset(self):
+        env = make_env()
+        with pytest.raises(AssertionError):
+            env.get_heuristic_action()

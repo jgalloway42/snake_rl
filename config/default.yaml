@@ -17,6 +17,7 @@ dqn:
   exploration_fraction: 0.3     # fraction of total_timesteps over which epsilon decays
   exploration_initial_eps: 1.0  # start fully random
   exploration_final_eps: 0.05   # floor epsilon; keeps a small amount of exploration forever
+  heuristic_prefill_steps: 50000 # pre-fill replay buffer with this many heuristic transitions (0 = disabled)
 
 env:
   grid_w: 16

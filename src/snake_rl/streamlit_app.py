@@ -218,6 +218,15 @@ with tab_train:
             else:
                 chart_col.markdown("&nbsp;")  # stable placeholder — keeps column height
 
+        st.subheader("Terminal Output")
+        log_text = state.get_log_snapshot() if state is not None else ""
+        if log_text:
+            lines = log_text.splitlines()
+            display_text = "\n".join(lines[-80:])
+        else:
+            display_text = "No output yet..."
+        st.code(display_text, language=None)
+
     st.markdown("---")
 
     # Config inputs — stacked full-width

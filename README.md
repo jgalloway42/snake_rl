@@ -40,6 +40,7 @@ A reinforcement learning agent trained to play Snake — built from scratch with
 core.py          ← Pure Python game logic. Zero pygame, zero torch.
 env.py           ← Gymnasium wrapper. Imports core. No pygame. No torch.
 policy.py        ← PyTorch nn.Module. No pygame. No gymnasium internals.
+heuristic.py     ← Rule-based action selector used to seed the replay buffer.
 rendering.py     ← ALL pygame code lives here and only here.
 train.py         ← SB3 DQN training loop. Wires together env + policy + MLflow.
 streamlit_app.py ← Demo app. Loads trained model, renders live gameplay.
@@ -51,8 +52,6 @@ The central design principle: **game logic, rendering, and RL are fully decouple
 ---
 
 ## Key engineering decisions
-
-**Integer grid coordinates throughout.** The original snake.py used Python 3's float division (`480 / 20 = 24.0`) mixed with pixel arithmetic, creating subtle boundary bugs. The refactored engine uses integer grid units everywhere; pixel conversion happens only in the renderer.
 
 **Relative actions (STRAIGHT / TURN_LEFT / TURN_RIGHT).** Rather than absolute directions, the agent outputs actions relative to its current heading. This keeps the action space at 3 (no illegal 180° reverse) and makes the policy's job simpler — it doesn't need to learn that "pressing left while heading left is invalid."
 
@@ -125,6 +124,7 @@ snake-rl/
 │   ├── core.py
 │   ├── env.py
 │   ├── policy.py
+│   ├── heuristic.py
 │   ├── rendering.py
 │   ├── train.py
 │   ├── streamlit_app.py
@@ -132,7 +132,8 @@ snake-rl/
 ├── tests/              # pytest suite (90%+ coverage)
 │   ├── test_core.py
 │   ├── test_env.py
-│   └── test_policy.py
+│   ├── test_policy.py
+│   └── test_heuristic.py
 ├── config/
 │   └── default.yaml    # All hyperparameters
 ├── notebooks/
@@ -152,6 +153,17 @@ snake-rl/
 Training saves `models/snake_dqn.zip` after each run. In the Streamlit Train tab, paste the path into "Continue from model" to pick up where you left off.
 
 > **Note:** `continue_from` preserves the model's saved parameters exactly. Config changes (reward weights, buffer size, etc.) only take effect on a **fresh** training run — they are ignored when continuing from a checkpoint.
+
+**Heuristic replay buffer pre-fill**
+
+Set `dqn.heuristic_prefill_steps` in `config/default.yaml` (default: 5000) to seed the replay buffer with rule-based transitions before RL training begins. The heuristic avoids immediate wall and self-collisions and moves toward food. This gives DQN a much better initial data distribution than purely random exploration.
+
+```yaml
+dqn:
+  heuristic_prefill_steps: 5000  # 0 = disabled
+```
+
+Pre-fill is skipped when continuing from a checkpoint (`continue_from`), since the buffer would be reset anyway.
 
 **Longer runs**
 
@@ -217,6 +229,7 @@ Training metrics are logged to MLflow every 2048 steps. The Streamlit Train tab 
 | `target_update_interval` | 1000 | Steps between hard target-network syncs |
 | `exploration_fraction` | 0.3 | Fraction of total steps over which epsilon decays |
 | `exploration_final_eps` | 0.05 | Minimum epsilon (floor exploration rate) |
+| `heuristic_prefill_steps` | 5000 | Heuristic transitions pre-loaded into replay buffer before training; 0 = disabled |
 
 ---
 

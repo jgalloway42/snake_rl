@@ -141,6 +141,18 @@ class SnakeEnv(gym.Env):
             return True
         return self._renderer.handle_events()
 
+    def get_heuristic_action(self) -> int:
+        """Return a rule-based action for the current game state.
+
+        Uses the collision-avoiding, food-seeking heuristic from
+        ``snake_rl.heuristic``.  Raises ``AssertionError`` if called before
+        ``reset()``.
+        """
+        assert self._snake is not None, "Call reset() before get_heuristic_action()"
+        from snake_rl.heuristic import heuristic_action  # lazy import
+
+        return heuristic_action(self._snake, self._food)
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
