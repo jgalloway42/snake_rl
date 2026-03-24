@@ -218,14 +218,30 @@ with tab_train:
             else:
                 chart_col.markdown("&nbsp;")  # stable placeholder — keeps column height
 
-        st.subheader("Terminal Output")
         log_text = state.get_log_snapshot() if state is not None else ""
-        if log_text:
-            lines = log_text.splitlines()
-            display_text = "\n".join(lines[-80:])
-        else:
-            display_text = "No output yet..."
-        st.code(display_text, language=None)
+        lines = log_text.splitlines() if log_text else ["No output yet..."]
+        display_text = "\n".join(lines[-200:])
+        import html as _html  # pylint: disable=import-outside-toplevel
+
+        # _TERM_H: terminal div height in px.
+        # Tuned so the terminal's bottom aligns with the bottom of the Live
+        # Preview image (square, 18 cells × 20 px/cell = 360 px natural) when
+        # rendered with width="stretch" in a [1,2] column layout.
+        # Calculation at ~1512 px viewport: left col ≈ 472 px; right col
+        # overhead = Training Metrics subheader (~45) + chart row (~190) = 235.
+        # Terminal height = 472 - 235 = 237 px → rounded to 240.
+        _TERM_H = 240
+        terminal_html = f"""<div id="term" style="
+            height:{_TERM_H}px;overflow-y:scroll;background:#0e1117;
+            color:#fafafa;font-family:'Courier New',Courier,monospace;
+            font-size:12px;padding:8px 10px;box-sizing:border-box;
+            white-space:pre;text-align:left;border-radius:4px;"
+        >{_html.escape(display_text)}</div>
+        <script>
+            var e=document.getElementById('term');
+            if(e)e.scrollTop=e.scrollHeight;
+        </script>"""
+        st.html(terminal_html)
 
     st.markdown("---")
 
