@@ -63,11 +63,10 @@ class MLflowCallback(BaseCallback):
     rather than on rollout end.
     """
 
-    # DQN emits these keys into logger.name_to_value during training steps.
-    # Keys are only present after learning_starts has been reached.
+    # DQN emits this key into logger.name_to_value during training steps.
+    # Only present after learning_starts has been reached.
     _SB3_KEYS: dict[str, str] = {
         "loss": "train/loss",
-        "exploration_rate": "train/exploration_rate",
     }
 
     def __init__(
@@ -94,6 +93,11 @@ class MLflowCallback(BaseCallback):
                 val = float(self.logger.name_to_value[sb3_key])
                 entry[key] = val
                 mlflow.log_metric(key, val, step=self.num_timesteps)
+
+        if hasattr(self.model, "exploration_rate"):
+            val = float(self.model.exploration_rate)
+            entry["exploration_rate"] = val
+            mlflow.log_metric("exploration_rate", val, step=self.num_timesteps)
 
         if len(self.model.ep_info_buffer) > 0:
             ep_rew = float(safe_mean([ep["r"] for ep in self.model.ep_info_buffer]))
@@ -310,7 +314,7 @@ def train(
 
         callbacks = [MLflowCallback(training_state=training_state)]
         render_every = train_cfg.get("render_every_n_episodes", 0)
-        if render_every and render_every > 0:
+        if render_every and render_every > 0 and training_state is not None:
             callbacks.append(
                 RenderCallback(render_every, env_kwargs, training_state=training_state)
             )

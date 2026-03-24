@@ -20,7 +20,11 @@ HUD_COLOR = (220, 220, 220)
 
 class PygameRenderer:
     def __init__(
-        self, grid_w: int, grid_h: int, cell_size: int = CELL_SIZE_DEFAULT
+        self,
+        grid_w: int,
+        grid_h: int,
+        cell_size: int = CELL_SIZE_DEFAULT,
+        headless: bool = False,
     ) -> None:
         self.grid_w = grid_w
         self.grid_h = grid_h
@@ -29,8 +33,11 @@ class PygameRenderer:
         self.screen_h = grid_h * cell_size
 
         pygame.init()
-        self.screen = pygame.display.set_mode((self.screen_w, self.screen_h))
-        pygame.display.set_caption("snake-rl")
+        if headless:
+            self.screen = pygame.Surface((self.screen_w, self.screen_h))
+        else:
+            self.screen = pygame.display.set_mode((self.screen_w, self.screen_h))
+            pygame.display.set_caption("snake-rl")
         self.surface = pygame.Surface((self.screen_w, self.screen_h))
         self.font = pygame.font.SysFont("terminal", 18)
 

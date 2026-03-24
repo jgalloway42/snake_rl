@@ -165,7 +165,11 @@ class SnakeEnv(gym.Env):
         if self._renderer is None:
             from snake_rl.rendering import PygameRenderer  # lazy import
 
-            self._renderer = PygameRenderer(self.grid_w, self.grid_h)
+            self._renderer = PygameRenderer(
+                self.grid_w,
+                self.grid_h,
+                headless=(self.render_mode == "rgb_array"),
+            )
         return self._renderer
 
     def _render_human(self):
