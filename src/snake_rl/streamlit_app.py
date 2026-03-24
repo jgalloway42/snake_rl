@@ -418,31 +418,48 @@ with tab_play:
         if should_run and st.session_state.model is not None:
             env = _env_from_model(st.session_state.model)
             obs, _ = env.reset()
-            frame_delay = 1.0 / render_fps
+            frames: list = []
             rewards: list[float] = []
+            info: dict = {}
 
+            # --- Phase 1: simulate at full speed, collect frames ---
+            p_score_ph.markdown("_Simulating..._")
             while True:
                 frame = env.render()
                 if frame is not None:
-                    p_frame_ph.image(frame, channels="RGB", width=480)
+                    frames.append(frame)
 
                 action, _ = st.session_state.model.predict(obs, deterministic=True)
                 obs, reward, terminated, truncated, info = env.step(int(action))
                 rewards.append(float(reward))
 
-                p_score_ph.markdown(
-                    f"**Score:** {info['score']}  |  **Steps:** {info['steps']}"
-                )
-                reward_chart_ph.line_chart(
-                    pd.DataFrame({"cumulative reward": pd.Series(rewards).cumsum()}),
-                    height=180,
-                )
-
-                time.sleep(frame_delay)
                 if terminated or truncated:
                     break
 
             env.close()
+
+            # --- Phase 2: play frames back at the target FPS ---
+            # Subtract actual work time from each sleep so display rate matches
+            # the FPS slider even when image encoding takes non-trivial time.
+            frame_delay = 1.0 / render_fps
+            n = len(frames)
+            for i, frame in enumerate(frames):
+                t0 = time.monotonic()
+                p_frame_ph.image(frame, channels="RGB", width=480)
+                p_score_ph.markdown(f"**Step:** {i + 1} / {n}")
+                elapsed = time.monotonic() - t0
+                remaining = frame_delay - elapsed
+                if remaining > 0:
+                    time.sleep(remaining)
+
+            # Show final score and reward chart once playback completes
+            p_score_ph.markdown(
+                f"**Score:** {info['score']}  |  **Steps:** {info['steps']}"
+            )
+            reward_chart_ph.line_chart(
+                pd.DataFrame({"cumulative reward": pd.Series(rewards).cumsum()}),
+                height=180,
+            )
             _record_result(info["score"], info["steps"], p_summary_ph)
 
             if st.session_state.run_continuously:
