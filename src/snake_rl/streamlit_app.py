@@ -231,16 +231,13 @@ with tab_train:
         st.subheader("Training Metrics")
         chart_configs = [
             ("Episode Reward", "ep_rew_mean"),
-            ("Value Loss", "value_loss"),
-            ("Policy Loss", "policy_loss"),
             ("Episode Length", "ep_len_mean"),
-            ("Entropy", "entropy"),
-            ("KL Divergence", "approx_kl"),
+            ("TD Loss", "loss"),
+            ("Exploration Rate", "exploration_rate"),
         ]
         metrics = state.get_metrics_snapshot() if state is not None else []
-        row1 = st.columns(3)
-        row2 = st.columns(3)
-        for chart_col, (title, mkey) in zip(row1 + row2, chart_configs):
+        row1 = st.columns(4)
+        for chart_col, (title, mkey) in zip(row1, chart_configs):
             chart_col.caption(title)
             chart_df = _make_chart_df(metrics, mkey) if metrics else None
             if chart_df is not None:
@@ -256,7 +253,7 @@ with tab_train:
     )
     t_continue_from = st.text_input(
         "Continue from model (optional)",
-        value="models/snake_dqn.zip",
+        value="",
         key="t_continue",
     )
 
