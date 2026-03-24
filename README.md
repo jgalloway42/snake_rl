@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/jgalloway42/snake_rl/actions/workflows/ci.yml/badge.svg)](https://github.com/jgalloway42/snake_rl/actions/workflows/ci.yml)
 
-A reinforcement learning agent trained to play Snake — built from scratch with a custom PyTorch policy network, Stable Baselines3 PPO, and a full experiment tracking pipeline.
+A reinforcement learning agent trained to play Snake — built from scratch with a custom PyTorch policy network, Stable Baselines3 DQN, and a full experiment tracking pipeline.
 
-> **Status:** Training in progress. Results and demo GIF coming soon.
+> **Status:** Switched to DQN after 4 PPO runs failed to converge. See [Training history](#training-history) for details.
 
 ---
 
@@ -23,7 +23,7 @@ A reinforcement learning agent trained to play Snake — built from scratch with
 
 | Layer | Technology |
 |---|---|
-| RL algorithm | Stable Baselines3 — PPO |
+| RL algorithm | Stable Baselines3 — DQN (Double DQN) |
 | Policy network | PyTorch (custom MLP) |
 | RL environment | Gymnasium |
 | Game engine | Pure Python (headless) |
@@ -41,7 +41,7 @@ core.py          ← Pure Python game logic. Zero pygame, zero torch.
 env.py           ← Gymnasium wrapper. Imports core. No pygame. No torch.
 policy.py        ← PyTorch nn.Module. No pygame. No gymnasium internals.
 rendering.py     ← ALL pygame code lives here and only here.
-train.py         ← SB3 PPO training loop. Wires together env + policy + MLflow.
+train.py         ← SB3 DQN training loop. Wires together env + policy + MLflow.
 streamlit_app.py ← Demo app. Loads trained model, renders live gameplay.
 main.py          ← CLI entry point (snake-rl --train / --run).
 ```
@@ -60,6 +60,8 @@ The central design principle: **game logic, rendering, and RL are fully decouple
 
 **Config-driven training.** All hyperparameters live in `config/default.yaml`. The training script reads them at runtime — no hardcoded values. Every training run logs its full config to MLflow, making experiments reproducible and comparable.
 
+**DQN over PPO for sparse rewards.** After 4 PPO runs (20M total steps) failed to converge, the diagnosis was structural: PPO is on-policy and discards experience after each rollout. With food sparsely placed on a 16×16 grid, too few food-eating transitions appear per rollout for reliable credit assignment. DQN's replay buffer lets rare positive events be replayed many times; Double DQN reduces Q-value overestimation of the "safe wandering" state.
+
 ---
 
 ## Quickstart
@@ -73,7 +75,7 @@ make install
 make test
 
 # Train the agent from the CLI (5M timesteps by default)
-# Every 50 episodes a pygame window shows the current agent playing a full game.
+# Every 24 episodes a preview renders the current agent playing a full game.
 make train
 
 # Launch the unified Streamlit app (Train + Play tabs)
@@ -82,14 +84,29 @@ make run
 
 The Streamlit app has two tabs:
 
-- **Train** — configure a run, start/stop training, watch real-time metric charts (episode reward, value loss, policy loss, entropy, KL divergence, episode length), see a live game preview every 50 episodes, and inspect the full config (reward weights, PPO params, environment settings) in a collapsible panel.
+- **Train** — configure a run, start/stop training, watch real-time metric charts (episode reward, TD loss, exploration rate, episode length), see a live game preview every 24 episodes, and inspect the full config in a collapsible panel.
 - **Play** — load a trained model and watch it play. Run single episodes or continuously, with a live leaderboard.
+
+---
+
+## Training history
+
+Four PPO runs (5M steps each) failed to converge before switching to DQN.
+
+| Run | ent_coef | toward | Outcome | Root cause |
+|-----|----------|--------|---------|------------|
+| 1 | 0.05 | 0.10 | Wandered, never ate | Shaping reward ≈ food reward; agent optimised shaping |
+| 2 | 0.05 | 0.01 | Same wandering | collision=-8 caused risk-aversion before food discovery |
+| 3 | 0.10 | 0.01 | Policy stayed random | ent_coef too high; entropy bonus overwhelmed policy gradient |
+| 4 | 0.02 | 0.0 | Reward flat at 2–5 | **Entropy correct, still failed** — PPO structural limit |
+
+Run 4 was the decisive experiment: entropy landed in the productive range (-0.5 to -0.7) yet reward never trended upward. This ruled out entropy tuning as the root cause and confirmed the issue is algorithmic. See `notebooks/run_analysis.ipynb` for the full analysis.
 
 ---
 
 ## Results
 
-> _To be updated after training completes._
+> _To be updated after DQN training completes._
 
 | Metric | Value |
 |---|---|
@@ -118,6 +135,8 @@ snake-rl/
 │   └── test_policy.py
 ├── config/
 │   └── default.yaml    # All hyperparameters
+├── notebooks/
+│   └── run_analysis.ipynb  # Training run analysis and cross-run comparison
 ├── models/             # Saved model artifacts (after training)
 ├── mlruns/             # MLflow experiment data (after training)
 ├── Makefile
@@ -128,104 +147,76 @@ snake-rl/
 
 ## Improving the agent
 
-The default config trains for 5M timesteps on a 24×24 grid — a reasonable starting point. Here are five options for getting a better agent:
+**Continue from a checkpoint**
 
-**1. Continue from a checkpoint**
+Training saves `models/snake_dqn.zip` after each run. In the Streamlit Train tab, paste the path into "Continue from model" to pick up where you left off.
 
-Training saves `models/snake_ppo.zip` after each run. In the Streamlit Train tab, paste the path into "Continue from model" to pick up where you left off. Equivalent CLI flag: `--config config/default.yaml` (training auto-saves; re-run `make train` after loading the checkpoint manually via `PPO.load()`).
+> **Note:** `continue_from` preserves the model's saved parameters exactly. Config changes (reward weights, buffer size, etc.) only take effect on a **fresh** training run — they are ignored when continuing from a checkpoint.
 
-> **Note:** `continue_from` preserves the model's saved parameters exactly. Config changes (`ent_coef`, reward weights, etc.) only take effect on a **fresh** training run — they are ignored when continuing from a checkpoint.
+**Longer runs**
 
-**2. Longer runs**
+Increase `training.total_timesteps` in `config/default.yaml`. DQN with a replay buffer needs time to fill the buffer and propagate Q-values. The first ~10k steps (`learning_starts`) are pure random exploration.
 
-Increase `training.total_timesteps` in `config/default.yaml`. Snake is a hard exploration problem — agents often don't start consistently finding food until ~500k steps, and don't chain multiple food items until 2M+.
+**Reward shaping**
 
-```yaml
-training:
-  total_timesteps: 5_000_000
-```
-
-**3. Reward shaping**
-
-All reward weights are in `config/default.yaml` under the `reward` key — no code changes needed:
+All reward weights are in `config/default.yaml` under the `reward` key:
 
 ```yaml
 reward:
-  food: 64.0        # reward for eating food
-  collision: -16.0  # penalty for hitting a wall or the snake's own body
-  toward: 0.1       # reward per step moving closer to food (Manhattan distance)
-  away: -0.05       # penalty per step moving away from food
+  food: 16.0        # reward for eating food
+  collision: -2.0   # penalty for hitting a wall or the snake's own body
+  toward: 0.0       # disabled — DQN handles credit assignment via Q-value propagation
+  away: 0.0         # disabled
 ```
 
-**Critical:** `toward` must be non-zero. Setting `toward: 0.0` removes all per-step positive signal — the only reward becomes eating food, which is too sparse to learn from reliably on a 24×24 grid. Agents trained this way never achieve positive mean rewards even after millions of steps.
+With DQN, distance shaping is generally not needed — the Q-function propagates the value of being near food backward through the replay buffer automatically via TD bootstrapping. If you do add shaping, keep it very small relative to `food` reward.
 
-Guidelines for tuning:
-- Keep `toward` small relative to `food` (~0.1–0.5% of food reward). Too large and the agent learns to spiral toward food instead of planning ahead.
-- Keep `away` small and negative (-0.05 to -0.1). A large penalty (e.g., -0.5) over-punishes normal exploration and makes the reward signal noisy.
-- Once the agent reliably eats food, reduce or remove distance shaping — it can penalise longer paths that ultimately reach food.
-
-**4. Curriculum: start on a smaller grid**
-
-A 10×10 grid is much easier to explore than 24×24. Train to convergence on the small grid, then transfer:
-
-```yaml
-env:
-  grid_w: 10
-  grid_h: 10
-  max_steps: 200
-```
-
-Load the small-grid checkpoint and continue training on the full 24×24 grid. The policy generalises better than training from scratch on the large grid.
-
-**5. Swap to a CNN policy**
+**Swap to a CNN policy**
 
 The current MLP flattens the 3-channel spatial observation. A CNN can exploit the 2-D structure. To switch, replace `SnakeMLP` in `policy.py` with a `NatureCNN`-style extractor and update the `policy_kwargs` in `train.py`. No changes to the environment are needed — the `(3, H, W)` observation shape is already CNN-friendly.
+
+**Prioritized Experience Replay (future)**
+
+SB3's built-in DQN does not support PER, but it could be added via a custom `ReplayBuffer` subclass. PER would further amplify rare food-eating transitions during training — useful if the current DQN still struggles with sparse rewards.
 
 ---
 
 ## Convergence troubleshooting
 
-Training metrics are logged to MLflow every rollout (~8k steps with 4 envs × 2048 n_steps). Query the DB directly to diagnose issues:
+Training metrics are logged to MLflow every 2048 steps. The Streamlit Train tab charts them live.
 
-```python
-import sqlite3, pandas as pd
+**DQN-specific metrics to watch:**
 
-conn = sqlite3.connect("mlruns/mlflow.db")
-runs = pd.read_sql("SELECT run_uuid, status, start_time FROM runs ORDER BY start_time DESC", conn)
-
-# Latest metrics for the most recent run
-run_id = runs.iloc[0]["run_uuid"]
-metrics = pd.read_sql(
-    "SELECT key, value, step FROM metrics WHERE run_uuid=? ORDER BY step",
-    conn, params=(run_id,)
-).pivot_table(index="step", columns="key", values="value", aggfunc="last")
-```
+| Metric | What to look for |
+|--------|-----------------|
+| `ep_rew_mean` | Should trend upward past 16 (= 1 food/episode) within ~1M steps |
+| `ep_len_mean` | Rising length with rising reward = snake is growing, not just surviving |
+| `loss` (TD loss) | Should decrease as Q-function converges; persistent high loss = unstable training |
+| `exploration_rate` | Should decay from 1.0 → 0.05 over `exploration_fraction` × total steps |
 
 **Common failure patterns:**
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| `ep_rew_mean` never turns positive | `reward.toward = 0` — reward too sparse | Set `toward: 0.1` |
-| `ep_rew_mean` positive early then plateaus | Entropy collapsed; agent stuck in local optimum | Increase `ent_coef` (0.01 → 0.02) |
-| `ep_len_mean` very short (~74 steps) | Agent dies frequently; not navigating toward food | Check `toward` reward is non-zero |
-| `value_loss` high and volatile (>30) | Reward signal inconsistent; critic can't track | Reduce `away` magnitude; ensure `toward > 0` |
-| `clip_fraction` consistently > 0.25 | Policy updates too large | Reduce `learning_rate` or `clip_range` |
-| `approx_kl` > 0.03 | Policy shifting too fast per update | Reduce `n_epochs` or `learning_rate` |
-| `entropy` collapses below -1.05 early | Exploration gone; agent in premature local optimum | Increase `ent_coef` (0.01 → 0.02) |
-| Multiple RUNNING runs in MLflow | Streamlit training threads not stopped on tab close | Manually stop via the Stop button before refreshing |
+| `ep_rew_mean` flat, `exploration_rate` still high | Buffer hasn't seen enough food events yet | Wait — this is expected until epsilon decays |
+| `ep_rew_mean` flat after epsilon has decayed | Q-function overfit to wandering | Try smaller `learning_rate` or larger `buffer_size` |
+| `loss` very high and not decreasing | Reward scale too large (high MSE) | Halve `reward.food` |
+| `ep_len_mean` very short throughout | Agent dies too fast; not exploring | Reduce `collision` penalty magnitude |
+| `ep_rew_mean` spikes then collapses | Target network out of sync | Reduce `target_update_interval` |
 
-**PPO parameter reference:**
+**DQN parameter reference:**
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
-| `learning_rate` | 0.0003 | Adam step size; standard starting point, decay if plateauing |
-| `n_steps` | 2048 | Steps per env per rollout; larger = lower variance, slower updates |
-| `batch_size` | 64 | Mini-batch size for gradient steps |
-| `n_epochs` | 10 | Gradient passes over each rollout buffer |
-| `gamma` | 0.99 | Discount factor; keep high for long-horizon survival tasks |
-| `gae_lambda` | 0.95 | Advantage estimation bias/variance tradeoff (SB3 default) |
-| `clip_range` | 0.2 | Limits policy change per update; 0.2 is the standard PPO value |
-| `ent_coef` | 0.02 | Entropy bonus; prevents premature convergence to suboptimal policies |
+| `learning_rate` | 0.0001 | Adam step size |
+| `buffer_size` | 100000 | Replay buffer capacity; larger = more diverse batches |
+| `learning_starts` | 10000 | Random steps before first gradient update |
+| `batch_size` | 32 | Mini-batch sampled from replay buffer per update |
+| `gamma` | 0.99 | Discount factor; high value for long-horizon tasks |
+| `train_freq` | 4 | Gradient update every N env steps |
+| `target_update_interval` | 1000 | Steps between hard target-network syncs |
+| `exploration_fraction` | 0.3 | Fraction of total steps over which epsilon decays |
+| `exploration_final_eps` | 0.05 | Minimum epsilon (floor exploration rate) |
 
 ---
 

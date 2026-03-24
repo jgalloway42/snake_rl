@@ -11,7 +11,7 @@ import time
 import pandas as pd
 import yaml
 import streamlit as st
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN
 
 from snake_rl.env import SnakeEnv
 from snake_rl.train import TrainingState
@@ -256,7 +256,7 @@ with tab_train:
     )
     t_continue_from = st.text_input(
         "Continue from model (optional)",
-        value="models/snake_ppo.zip",
+        value="models/snake_dqn.zip",
         key="t_continue",
     )
 
@@ -285,7 +285,7 @@ with tab_train:
             _cfg = yaml.safe_load(_f)
         with st.expander("Config", expanded=False):
             _r = _cfg.get("reward", {})
-            _p = _cfg.get("ppo", {})
+            _d = _cfg.get("dqn", {})
             _e = _cfg.get("env", {})
             _t = _cfg.get("training", {})
             st.markdown("**Reward shaping**")
@@ -312,37 +312,41 @@ with tab_train:
                     columns=["key", "value", "description"],
                 ).astype({"value": str})
             )
-            st.markdown("**PPO**")
+            st.markdown("**DQN**")
             st.table(
                 pd.DataFrame(
                     [
                         (
                             "learning_rate",
-                            _p.get("learning_rate"),
+                            _d.get("learning_rate"),
                             "Adam learning rate",
                         ),
                         (
                             "gamma",
-                            _p.get("gamma"),
+                            _d.get("gamma"),
                             "Discount factor for future rewards",
                         ),
                         (
-                            "ent_coef",
-                            _p.get("ent_coef"),
-                            "Entropy bonus — higher = more exploration",
+                            "buffer_size",
+                            _d.get("buffer_size"),
+                            "Replay buffer capacity (transitions)",
                         ),
                         (
-                            "clip_range",
-                            _p.get("clip_range"),
-                            "PPO clip ε — limits policy update size",
+                            "exploration_fraction",
+                            _d.get("exploration_fraction"),
+                            "Fraction of training for epsilon decay",
                         ),
                         (
-                            "n_steps",
-                            _p.get("n_steps"),
-                            "Steps collected per rollout per env",
+                            "exploration_final_eps",
+                            _d.get("exploration_final_eps"),
+                            "Final epsilon (floor exploration rate)",
                         ),
-                        ("n_epochs", _p.get("n_epochs"), "Gradient steps per rollout"),
-                        ("batch_size", _p.get("batch_size"), "Mini-batch size"),
+                        (
+                            "target_update_interval",
+                            _d.get("target_update_interval"),
+                            "Steps between target network syncs",
+                        ),
+                        ("batch_size", _d.get("batch_size"), "Mini-batch size"),
                     ],
                     columns=["key", "value", "description"],
                 ).astype({"value": str})
@@ -396,11 +400,11 @@ with tab_play:
     with play_left:
         st.subheader("Model")
         p_model_path = st.text_input(
-            "Model path (.zip)", value="models/snake_ppo.zip", key="p_model_path"
+            "Model path (.zip)", value="models/snake_dqn.zip", key="p_model_path"
         )
         if st.button("Load Model"):
             try:
-                st.session_state.model = PPO.load(p_model_path)
+                st.session_state.model = DQN.load(p_model_path)
                 st.success(f"Loaded: {p_model_path}")
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 st.error(f"Failed to load model: {exc}")

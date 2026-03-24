@@ -16,10 +16,10 @@ from pathlib import Path
 def cli() -> None:
     parser = argparse.ArgumentParser(
         prog="snake-rl",
-        description="Train or demo a PPO agent for Snake.",
+        description="Train or demo a DQN agent for Snake.",
     )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--train", action="store_true", help="Run PPO training")
+    group.add_argument("--train", action="store_true", help="Run DQN training")
     group.add_argument("--run", action="store_true", help="Launch Streamlit demo app")
     parser.add_argument(
         "--config",

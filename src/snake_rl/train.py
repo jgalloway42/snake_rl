@@ -1,5 +1,5 @@
 """
-train.py — SB3 PPO training loop.
+train.py — SB3 DQN training loop.
 All hyperparameters come from config/default.yaml — nothing is hardcoded here.
 """
 
@@ -14,7 +14,7 @@ from typing import Any
 import mlflow
 import numpy as np
 import yaml
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import safe_mean
@@ -53,19 +53,21 @@ class TrainingState:
 # MLflow + live-metrics callback
 # ---------------------------------------------------------------------------
 
+_LOG_INTERVAL = 2048  # log metrics every N steps
+
 
 class MLflowCallback(BaseCallback):
-    """Log SB3 rollout/train metrics to MLflow and optionally to TrainingState."""
+    """Log SB3 DQN metrics to MLflow and optionally to TrainingState.
 
-    # ep_rew_mean / ep_len_mean are logged by PPO *after* _on_rollout_end fires,
-    # so they are not yet in logger.name_to_value at callback time — read them
-    # directly from model.ep_info_buffer instead (see _on_rollout_end).
+    DQN has no rollout buffer, so metrics are logged every _LOG_INTERVAL steps
+    rather than on rollout end.
+    """
+
+    # DQN emits these keys into logger.name_to_value during training steps.
+    # Keys are only present after learning_starts has been reached.
     _SB3_KEYS: dict[str, str] = {
-        "value_loss": "train/value_loss",
-        "policy_loss": "train/policy_gradient_loss",
-        "entropy": "train/entropy_loss",
-        "approx_kl": "train/approx_kl",
-        "clip_fraction": "train/clip_fraction",
+        "loss":             "train/loss",
+        "exploration_rate": "train/exploration_rate",
     }
 
     def __init__(
@@ -75,19 +77,24 @@ class MLflowCallback(BaseCallback):
     ) -> None:
         super().__init__(verbose)
         self.training_state = training_state
+        self._last_log_step: int = 0
 
     def _on_step(self) -> bool:
         if self.training_state is not None:
             self.training_state.current_timesteps = self.num_timesteps
-        return True
 
-    def _on_rollout_end(self) -> None:
+        if self.num_timesteps - self._last_log_step < _LOG_INTERVAL:
+            return True
+        self._last_log_step = self.num_timesteps
+
         entry: dict[str, Any] = {"step": self.num_timesteps}
+
         for key, sb3_key in self._SB3_KEYS.items():
             if sb3_key in self.logger.name_to_value:
                 val = float(self.logger.name_to_value[sb3_key])
                 entry[key] = val
                 mlflow.log_metric(key, val, step=self.num_timesteps)
+
         if len(self.model.ep_info_buffer) > 0:
             ep_rew = float(safe_mean([ep["r"] for ep in self.model.ep_info_buffer]))
             ep_len = float(safe_mean([ep["l"] for ep in self.model.ep_info_buffer]))
@@ -95,8 +102,11 @@ class MLflowCallback(BaseCallback):
             entry["ep_len_mean"] = ep_len
             mlflow.log_metric("ep_rew_mean", ep_rew, step=self.num_timesteps)
             mlflow.log_metric("ep_len_mean", ep_len, step=self.num_timesteps)
+
         if self.training_state is not None and len(entry) > 1:
             self.training_state.append_metrics(entry)
+
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +171,7 @@ class RenderCallback(BaseCallback):
                             buf = io.BytesIO()
                             self.model.save(buf)
                             buf.seek(0)
-                            model_snapshot = PPO.load(buf)
+                            model_snapshot = DQN.load(buf)
                             self._render_thread = threading.Thread(
                                 target=self._run_headless_episode,
                                 args=(model_snapshot,),
@@ -224,7 +234,7 @@ def train(
     training_state: TrainingState | None = None,
     continue_from: str | None = None,
 ) -> None:
-    """Run a full PPO training session.
+    """Run a full DQN training session.
 
     Args:
         config_path:     Path to the YAML config file.
@@ -235,7 +245,7 @@ def train(
         cfg = yaml.safe_load(f)
 
     train_cfg = cfg["training"]
-    ppo_cfg = cfg["ppo"]
+    dqn_cfg = cfg["dqn"]
     env_cfg = cfg["env"]
     reward_cfg = cfg.get("reward", {})
     policy_cfg = cfg["policy"]
@@ -278,19 +288,22 @@ def train(
         }
 
         if continue_from:
-            model = PPO.load(continue_from, env=vec_env)
+            model = DQN.load(continue_from, env=vec_env)
         else:
-            model = PPO(
+            model = DQN(
                 "MlpPolicy",
                 vec_env,
-                learning_rate=ppo_cfg["learning_rate"],
-                n_steps=ppo_cfg["n_steps"],
-                batch_size=ppo_cfg["batch_size"],
-                n_epochs=ppo_cfg["n_epochs"],
-                gamma=ppo_cfg["gamma"],
-                gae_lambda=ppo_cfg.get("gae_lambda", 0.95),
-                clip_range=ppo_cfg["clip_range"],
-                ent_coef=ppo_cfg["ent_coef"],
+                learning_rate=dqn_cfg["learning_rate"],
+                buffer_size=dqn_cfg["buffer_size"],
+                learning_starts=dqn_cfg["learning_starts"],
+                batch_size=dqn_cfg["batch_size"],
+                gamma=dqn_cfg["gamma"],
+                train_freq=dqn_cfg["train_freq"],
+                gradient_steps=dqn_cfg["gradient_steps"],
+                target_update_interval=dqn_cfg["target_update_interval"],
+                exploration_fraction=dqn_cfg["exploration_fraction"],
+                exploration_initial_eps=dqn_cfg["exploration_initial_eps"],
+                exploration_final_eps=dqn_cfg["exploration_final_eps"],
                 policy_kwargs=policy_kwargs,
                 verbose=1,
             )

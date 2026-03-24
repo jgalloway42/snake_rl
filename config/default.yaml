@@ -1,19 +1,22 @@
 training:
   total_timesteps: 5_000_000
   render_every_n_episodes: 24   # 0 or -1 = fully headless; 1 = every episode
-  n_envs: 4
+  n_envs: 1                     # DQN uses a single env with replay buffer
   save_path: "models/"
-  model_name: "snake_ppo"
+  model_name: "snake_dqn"
 
-ppo:
-  learning_rate: 0.0001  # lowered from 0.0003; slower updates give value function more time to fit
-  n_steps: 2048          # steps collected per env per rollout; larger = lower variance
-  batch_size: 64         # samples per gradient step
-  n_epochs: 10           # gradient passes over each rollout buffer
-  gamma: 0.99            # discount factor; high value preserves long-term survival incentive
-  gae_lambda: 0.95       # bias-variance tradeoff for advantage estimation (SB3 default)
-  clip_range: 0.2        # limits how much the policy can change per update (standard PPO)
-  ent_coef: 0.02         # lowered from 0.10; slows collapse without dominating policy gradient
+dqn:
+  learning_rate: 0.0001
+  buffer_size: 100000           # replay buffer size; 100k transitions
+  learning_starts: 10000        # random steps before first gradient update
+  batch_size: 32
+  gamma: 0.99                   # discount factor
+  train_freq: 4                 # gradient step every 4 env steps
+  gradient_steps: 1
+  target_update_interval: 1000  # steps between hard target-network syncs
+  exploration_fraction: 0.3     # fraction of total_timesteps for epsilon decay
+  exploration_initial_eps: 1.0  # start fully random
+  exploration_final_eps: 0.05   # floor epsilon
 
 env:
   grid_w: 16
@@ -21,10 +24,10 @@ env:
   max_steps: 300
 
 reward:
-  food: 16.0        # scaled down 4× from 64; reduces value-function variance (MSE loss scales with food²)
-  collision: -2.0   # scaled down 4× from -8; maintains 8:1 food:collision ratio; cheaper death = more early exploration
-  toward: 0.0       # removed shaping; food is the only positive signal
-  away: 0.0         # removed shaping; forces agent to learn from food reward alone  # scaled proportionally to toward (2:1 ratio)
+  food: 16.0        # scaled down 4× from 64; reduces value-function variance
+  collision: -2.0   # 8:1 food:collision ratio; cheap death = more early exploration
+  toward: 0.0       # no shaping; food is the only positive signal
+  away: 0.0         # no shaping
 
 policy:
   features_dim: 64
