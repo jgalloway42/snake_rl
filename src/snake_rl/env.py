@@ -9,7 +9,7 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 
-from snake_rl.core import Action, Food, Snake, apply_action
+from snake_rl.core import Action, Food, Snake, apply_action, DOWN, LEFT, RIGHT, UP
 
 
 class SnakeEnv(gym.Env):
@@ -39,10 +39,11 @@ class SnakeEnv(gym.Env):
         self.toward_reward = toward_reward
         self.away_penalty = away_penalty
 
+        obs_size = 3 * self.grid_h * self.grid_w + 4
         self.observation_space = spaces.Box(
             low=0.0,
             high=1.0,
-            shape=(3, self.grid_h, self.grid_w),
+            shape=(obs_size,),
             dtype=np.float32,
         )
         self.action_space = spaces.Discrete(3)
@@ -144,15 +145,21 @@ class SnakeEnv(gym.Env):
     # Internal helpers
     # ------------------------------------------------------------------
 
+    _DIRECTION_INDEX = {UP: 0, RIGHT: 1, DOWN: 2, LEFT: 3}
+
     def _get_obs(self) -> np.ndarray:
-        obs = np.zeros((3, self.grid_h, self.grid_w), dtype=np.float32)
+        grid = np.zeros((3, self.grid_h, self.grid_w), dtype=np.float32)
         hx, hy = self._snake.head
-        obs[0, hy, hx] = 1.0
+        grid[0, hy, hx] = 1.0
         for bx, by in self._snake.body_cells():
-            obs[1, by, bx] = 1.0
+            grid[1, by, bx] = 1.0
         fx, fy = self._food.position
-        obs[2, fy, fx] = 1.0
-        return obs
+        grid[2, fy, fx] = 1.0
+
+        dir_one_hot = np.zeros(4, dtype=np.float32)
+        dir_one_hot[self._DIRECTION_INDEX[self._snake.direction]] = 1.0
+
+        return np.concatenate([grid.flatten(), dir_one_hot])
 
     def _get_info(self) -> dict:
         return {

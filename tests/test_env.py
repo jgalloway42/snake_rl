@@ -26,11 +26,9 @@ class TestObservationShape:
     def test_reset_obs_shape(self):
         env = make_env()
         obs, _ = env.reset()
-        assert obs.shape == (
-            3,
-            10,
-            10,
-        )  # grid_w=8 playable → 10×10 total (+ 1-cell border each side)
+        # grid_w=8 playable → 10×10 total (+ 1-cell border each side)
+        # flat: 3 * 10 * 10 grid + 4 direction one-hot = 304
+        assert obs.shape == (304,)
 
     def test_reset_obs_dtype(self):
         env = make_env()
@@ -41,7 +39,9 @@ class TestObservationShape:
         env = make_env()
         env.reset()
         obs, *_ = env.step(Action.STRAIGHT)
-        assert obs.shape == (3, 10, 10)  # grid_w=8 playable → 10×10 total
+        assert obs.shape == (
+            304,
+        )  # grid_w=8 playable → 10×10 total, flat + 4 direction
 
     def test_step_obs_dtype(self):
         env = make_env()
@@ -59,15 +59,17 @@ class TestObservationCorrectness:
     def test_channel_0_has_one_at_head(self):
         env = make_env()
         obs, _ = env.reset()
+        grid = obs[:300].reshape(3, 10, 10)
         hx, hy = env._snake.head
-        assert obs[0, hy, hx] == 1.0
-        assert obs[0].sum() == 1.0
+        assert grid[0, hy, hx] == 1.0
+        assert grid[0].sum() == 1.0
 
     def test_channel_1_body_cells(self):
         env = make_env()
         obs, _ = env.reset()
+        grid = obs[:300].reshape(3, 10, 10)
         # Single-cell snake — body channel should be all zeros
-        assert obs[1].sum() == 0.0
+        assert grid[1].sum() == 0.0
 
     def test_channel_1_no_head(self):
         """After growing, body channel has 1s only at body cells, not head."""
@@ -77,16 +79,18 @@ class TestObservationCorrectness:
         env._snake.positions = [(4, 4), (3, 4), (2, 4)]
         env._snake.length = 3
         obs = env._get_obs()
+        grid = obs[:300].reshape(3, 10, 10)
         hx, hy = env._snake.head
-        assert obs[1, hy, hx] == 0.0
-        assert obs[1].sum() == 2.0
+        assert grid[1, hy, hx] == 0.0
+        assert grid[1].sum() == 2.0
 
     def test_channel_2_food_position(self):
         env = make_env()
         obs, _ = env.reset()
+        grid = obs[:300].reshape(3, 10, 10)
         fx, fy = env._food.position
-        assert obs[2, fy, fx] == 1.0
-        assert obs[2].sum() == 1.0
+        assert grid[2, fy, fx] == 1.0
+        assert grid[2].sum() == 1.0
 
 
 # ---------------------------------------------------------------------------
