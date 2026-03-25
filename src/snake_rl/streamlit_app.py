@@ -233,7 +233,7 @@ with tab_train:
         # Terminal height = 472 - 235 = 237 px → rounded to 240.
         _TERM_H = 240
         terminal_html = f"""<div id="term" style="
-            height:{_TERM_H}px;overflow-y:scroll;background:#0e1117;
+            height:{_TERM_H}px;overflow-y:scroll;background:#1a1d24;
             color:#fafafa;font-family:'Courier New',Courier,monospace;
             font-size:12px;padding:8px 10px;box-sizing:border-box;
             white-space:pre;text-align:left;border-radius:4px;"

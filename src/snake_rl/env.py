@@ -41,7 +41,7 @@ class SnakeEnv(gym.Env):
         self.away_penalty = away_penalty
         self.step_penalty = step_penalty
 
-        obs_size = 3 * self.grid_h * self.grid_w + 4
+        obs_size = 11
         self.observation_space = spaces.Box(
             low=0.0,
             high=1.0,
@@ -163,18 +163,37 @@ class SnakeEnv(gym.Env):
     _DIRECTION_INDEX = {UP: 0, RIGHT: 1, DOWN: 2, LEFT: 3}
 
     def _get_obs(self) -> np.ndarray:
-        grid = np.zeros((3, self.grid_h, self.grid_w), dtype=np.float32)
         hx, hy = self._snake.head
-        grid[0, hy, hx] = 1.0
-        for bx, by in self._snake.body_cells():
-            grid[1, by, bx] = 1.0
         fx, fy = self._food.position
-        grid[2, fy, fx] = 1.0
+        d = self._snake.direction
 
-        dir_one_hot = np.zeros(4, dtype=np.float32)
-        dir_one_hot[self._DIRECTION_INDEX[self._snake.direction]] = 1.0
+        left_dir = apply_action(d, Action.TURN_LEFT)
+        right_dir = apply_action(d, Action.TURN_RIGHT)
 
-        return np.concatenate([grid.flatten(), dir_one_hot])
+        body = self._snake.positions[1:]
+
+        def danger(direction) -> float:
+            cx, cy = hx + direction.dx, hy + direction.dy
+            if cx < 1 or cx >= self.grid_w - 1 or cy < 1 or cy >= self.grid_h - 1:
+                return 1.0
+            return 1.0 if (cx, cy) in body else 0.0
+
+        one_hot = [0.0, 0.0, 0.0, 0.0]
+        one_hot[self._DIRECTION_INDEX[d]] = 1.0
+
+        return np.array(
+            [
+                danger(d),  # danger straight
+                danger(left_dir),  # danger left
+                danger(right_dir),  # danger right
+                1.0 if fx < hx else 0.0,  # food left
+                1.0 if fx > hx else 0.0,  # food right
+                1.0 if fy < hy else 0.0,  # food up (Y increases downward)
+                1.0 if fy > hy else 0.0,  # food down
+                *one_hot,  # heading one-hot: up, right, down, left
+            ],
+            dtype=np.float32,
+        )
 
     def _get_info(self) -> dict:
         return {

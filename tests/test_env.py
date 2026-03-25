@@ -26,9 +26,7 @@ class TestObservationShape:
     def test_reset_obs_shape(self):
         env = make_env()
         obs, _ = env.reset()
-        # grid_w=8 playable → 10×10 total (+ 1-cell border each side)
-        # flat: 3 * 10 * 10 grid + 4 direction one-hot = 304
-        assert obs.shape == (304,)
+        assert obs.shape == (11,)
 
     def test_reset_obs_dtype(self):
         env = make_env()
@@ -39,9 +37,7 @@ class TestObservationShape:
         env = make_env()
         env.reset()
         obs, *_ = env.step(Action.STRAIGHT)
-        assert obs.shape == (
-            304,
-        )  # grid_w=8 playable → 10×10 total, flat + 4 direction
+        assert obs.shape == (11,)
 
     def test_step_obs_dtype(self):
         env = make_env()
@@ -56,41 +52,64 @@ class TestObservationShape:
 
 
 class TestObservationCorrectness:
-    def test_channel_0_has_one_at_head(self):
-        env = make_env()
-        obs, _ = env.reset()
-        grid = obs[:300].reshape(3, 10, 10)
-        hx, hy = env._snake.head
-        assert grid[0, hy, hx] == 1.0
-        assert grid[0].sum() == 1.0
-
-    def test_channel_1_body_cells(self):
-        env = make_env()
-        obs, _ = env.reset()
-        grid = obs[:300].reshape(3, 10, 10)
-        # Single-cell snake — body channel should be all zeros
-        assert grid[1].sum() == 0.0
-
-    def test_channel_1_no_head(self):
-        """After growing, body channel has 1s only at body cells, not head."""
+    def test_danger_straight_detects_wall(self):
+        # Snake at (1,4) facing LEFT — next cell is (0,4), a wall
         env = make_env()
         env.reset()
-        # Manually grow and extend positions to get a 3-cell snake
-        env._snake.positions = [(4, 4), (3, 4), (2, 4)]
-        env._snake.length = 3
+        env._snake.positions = [(1, 4)]
+        env._snake.direction = LEFT
         obs = env._get_obs()
-        grid = obs[:300].reshape(3, 10, 10)
-        hx, hy = env._snake.head
-        assert grid[1, hy, hx] == 0.0
-        assert grid[1].sum() == 2.0
+        assert obs[0] == 1.0  # danger_straight
 
-    def test_channel_2_food_position(self):
+    def test_danger_left_detects_wall(self):
+        # Snake at (4,1) facing RIGHT — turning left gives UP, next cell (4,0) is a wall
         env = make_env()
-        obs, _ = env.reset()
-        grid = obs[:300].reshape(3, 10, 10)
-        fx, fy = env._food.position
-        assert grid[2, fy, fx] == 1.0
-        assert grid[2].sum() == 1.0
+        env.reset()
+        env._snake.positions = [(4, 1)]
+        env._snake.direction = RIGHT
+        obs = env._get_obs()
+        assert obs[1] == 1.0  # danger_left
+
+    def test_no_danger_open_space(self):
+        # Snake in center facing RIGHT — all three directions are open
+        env = make_env()
+        env.reset()
+        env._snake.positions = [(5, 5)]
+        env._snake.direction = RIGHT
+        env._food.position = (7, 7)
+        obs = env._get_obs()
+        assert obs[0] == 0.0  # danger_straight
+        assert obs[1] == 0.0  # danger_left
+        assert obs[2] == 0.0  # danger_right
+
+    def test_food_left_flag(self):
+        env = make_env()
+        env.reset()
+        env._snake.positions = [(5, 5)]
+        env._food.position = (3, 5)  # food to the left
+        obs = env._get_obs()
+        assert obs[3] == 1.0  # food_left
+        assert obs[4] == 0.0  # food_right
+
+    def test_food_up_flag(self):
+        env = make_env()
+        env.reset()
+        env._snake.positions = [(5, 5)]
+        env._food.position = (5, 3)  # food above (lower Y)
+        obs = env._get_obs()
+        assert obs[5] == 1.0  # food_up
+        assert obs[6] == 0.0  # food_down
+
+    def test_direction_one_hot(self):
+        # Heading RIGHT → obs[8] = 1.0, others 0.0
+        env = make_env()
+        env.reset()
+        env._snake.direction = RIGHT
+        obs = env._get_obs()
+        assert obs[7] == 0.0  # dir_up
+        assert obs[8] == 1.0  # dir_right
+        assert obs[9] == 0.0  # dir_down
+        assert obs[10] == 0.0  # dir_left
 
 
 # ---------------------------------------------------------------------------

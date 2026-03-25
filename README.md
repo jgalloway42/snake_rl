@@ -55,7 +55,7 @@ The central design principle: **game logic, rendering, and RL are fully decouple
 
 **Relative actions (STRAIGHT / TURN_LEFT / TURN_RIGHT).** Rather than absolute directions, the agent outputs actions relative to its current heading. This keeps the action space at 3 (no illegal 180° reverse) and makes the policy's job simpler — it doesn't need to learn that "pressing left while heading left is invalid."
 
-**3-channel spatial observation.** The environment returns a `(3, H, W)` tensor with separate channels for the snake's head, body, and food. This is clean, extensible (a CNN policy could swap in without changing the env contract), and avoids the ambiguity of encoding multiple entities in a single channel.
+**Compact 11-feature observation.** Rather than flattening the full grid (972 floats for a 16×16 board), the environment returns 11 features: 3 danger flags (straight/left/right relative to heading), 4 food-direction flags (left/right/up/down), and a 4-element heading one-hot. These signals are *relative to the snake's current heading and position*, making them position-invariant — the MLP sees the same feature pattern whether the snake is near the center or the edge.
 
 **Config-driven training.** All hyperparameters live in `config/default.yaml`. The training script reads them at runtime — no hardcoded values. Every training run logs its full config to MLflow, making experiments reproducible and comparable.
 
@@ -147,6 +147,16 @@ snake-rl/
 ---
 
 ## Improving the agent
+
+**Observation representation**
+
+Three options for encoding game state, in order of increasing effort. These are independent — test one at a time to isolate impact:
+
+| Option | Status | Description | Trade-off |
+|--------|--------|-------------|-----------|
+| Compact 11-feature obs | **Implemented** | 3 danger flags + 4 food-direction flags + 4 heading one-hot | Position-invariant; MLP generalizes to edges. Only encodes the most action-relevant signals — no raw spatial layout. |
+| CNN policy | Not yet tried | Replace `SnakeMLP` with a NatureCNN-style extractor; keep the 3-channel grid observation | Learns spatial features automatically; more expressive than an MLP on flat features. More parameters, more data-hungry. |
+| Pure food-only reward | Not yet tried | `collision: 0.0`, `step: 0.0` — only food reward (+16.0) | Eliminates any center-cycling local optimum introduced by survival credits. Sparser signal; may train more slowly early on. |
 
 **Continue from a checkpoint**
 
