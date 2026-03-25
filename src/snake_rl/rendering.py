@@ -40,7 +40,7 @@ class PygameRenderer:
             pygame.display.set_caption("snake-rl")
         self.surface = pygame.Surface((self.screen_w, self.screen_h))
         self.font = pygame.font.SysFont("terminal", 18)
-        self.score_font = pygame.font.SysFont("monospace", 14)
+        self.score_font = pygame.font.SysFont("monospace", 14, bold=True)
 
     def draw(
         self,
@@ -123,7 +123,7 @@ class PygameRenderer:
 
     def _draw_score_on_border(self, score: int) -> None:
         """Render the score centered in the top border row."""
-        text = self.score_font.render(str(score), True, (20, 20, 20))
+        text = self.score_font.render(f"Score: {score}", True, (20, 20, 20))
         x = (self.screen_w - text.get_width()) // 2
         y = (self.cell_size - text.get_height()) // 2
         self.surface.blit(text, (x, y))
