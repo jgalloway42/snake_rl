@@ -38,3 +38,7 @@ policy:
 mlflow:
   experiment_name: "snake-rl"
   tracking_uri: "sqlite:///mlruns/mlflow.db"
+
+rendering:
+  snake_body_color: [51, 255, 0]    # RGB for snake body segments
+  snake_head_color: [15, 150, 15]   # RGB for snake head

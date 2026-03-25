@@ -346,6 +346,7 @@ def train(
     reward_cfg = cfg.get("reward", {})
     policy_cfg = cfg["policy"]
     mlflow_cfg = cfg["mlflow"]
+    rendering_cfg = cfg.get("rendering", {})
 
     if training_state is not None:
         training_state.total_timesteps = train_cfg["total_timesteps"]
@@ -369,6 +370,10 @@ def train(
             "toward_reward": reward_cfg.get("toward", 0.1),
             "away_penalty": reward_cfg.get("away", -0.3),
             "step_penalty": reward_cfg.get("step", 0.0),
+            "snake_color": tuple(rendering_cfg.get("snake_body_color", [51, 255, 0])),
+            "snake_head_color": tuple(
+                rendering_cfg.get("snake_head_color", [15, 150, 15])
+            ),
         }
         vec_env = make_vec_env(
             SnakeEnv,

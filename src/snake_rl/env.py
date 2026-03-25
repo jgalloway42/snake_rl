@@ -26,6 +26,8 @@ class SnakeEnv(gym.Env):
         toward_reward: float = 0.1,
         away_penalty: float = -0.3,
         step_penalty: float = 0.0,
+        snake_color: tuple = (51, 255, 0),
+        snake_head_color: tuple = (15, 150, 15),
     ) -> None:
         super().__init__()
         # grid_w/grid_h from config are the *playable* interior dimensions.
@@ -40,6 +42,8 @@ class SnakeEnv(gym.Env):
         self.toward_reward = toward_reward
         self.away_penalty = away_penalty
         self.step_penalty = step_penalty
+        self.snake_color = snake_color
+        self.snake_head_color = snake_head_color
 
         obs_size = 11
         self.observation_space = spaces.Box(
@@ -210,6 +214,8 @@ class SnakeEnv(gym.Env):
                 self.grid_w,
                 self.grid_h,
                 headless=(self.render_mode == "rgb_array"),
+                snake_color=self.snake_color,
+                snake_head_color=self.snake_head_color,
             )
         return self._renderer
 

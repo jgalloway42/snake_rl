@@ -11,7 +11,7 @@ CELL_SIZE_DEFAULT = 20
 BG_COLOR_DARK = (40, 40, 40)
 BG_COLOR_LIGHT = (52, 52, 52)
 SNAKE_COLOR = (51, 255, 0)
-SNAKE_HEAD_COLOR = (150, 255, 80)
+SNAKE_HEAD_COLOR = (255, 255, 0)
 FOOD_COLOR = (255, 204, 0)
 BORDER_COLOR = (255, 255, 255)
 BORDER_COLLISION_COLOR = (220, 30, 30)
@@ -26,12 +26,16 @@ class PygameRenderer:
         grid_h: int,
         cell_size: int = CELL_SIZE_DEFAULT,
         headless: bool = False,
+        snake_color: tuple = SNAKE_COLOR,
+        snake_head_color: tuple = SNAKE_HEAD_COLOR,
     ) -> None:
         self.grid_w = grid_w
         self.grid_h = grid_h
         self.cell_size = cell_size
         self.screen_w = grid_w * cell_size
         self.screen_h = grid_h * cell_size
+        self.snake_color = snake_color
+        self.snake_head_color = snake_head_color
 
         pygame.init()
         if headless:
@@ -111,7 +115,7 @@ class PygameRenderer:
     def _draw_snake(self, snake) -> None:
         cs = self.cell_size
         for i, (gx, gy) in enumerate(snake.positions):
-            color = SNAKE_HEAD_COLOR if i == 0 else SNAKE_COLOR
+            color = self.snake_head_color if i == 0 else self.snake_color
             rect = pygame.Rect(gx * cs, gy * cs, cs, cs)
             pygame.draw.rect(self.surface, color, rect)
             pygame.draw.rect(self.surface, BG_COLOR_DARK, rect, 1)
