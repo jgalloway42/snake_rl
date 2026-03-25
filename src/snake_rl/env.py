@@ -100,7 +100,7 @@ class SnakeEnv(gym.Env):
             reward = self.collision_penalty
             terminated = True
         elif self._snake.head == self._food.position:
-            reward = self.food_reward
+            reward = self.food_reward + self.step_penalty
             self._snake.grow()
             occupied = set(self._snake.positions)
             self._food.randomize(occupied)

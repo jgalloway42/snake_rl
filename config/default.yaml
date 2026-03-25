@@ -17,7 +17,7 @@ dqn:
   exploration_fraction: 0.3     # fraction of total_timesteps over which epsilon decays
   exploration_initial_eps: 1.0  # start fully random
   exploration_final_eps: 0.05   # floor epsilon; keeps a small amount of exploration forever
-  heuristic_prefill_steps: 50000 # pre-fill replay buffer with this many heuristic transitions (0 = disabled)
+  heuristic_prefill_steps: 5000 # pre-fill replay buffer with this many heuristic transitions (0 = disabled)
 
 env:
   grid_w: 16
@@ -26,10 +26,10 @@ env:
 
 reward:
   food: 16.0        # scaled down 4× from 64; reduces value-function variance
-  collision: -2.0   # 8:1 food:collision ratio; cheap death = more early exploration
+  collision: 0.0    # no explicit death penalty; death is implicitly costly via loss of future survival credits
   toward: 0.0       # no shaping; food is the only positive signal
   away: 0.0         # no shaping
-  step: -0.05       # per-step cost; prevents cycling by making survival without eating costly
+  step: 0.01        # survival credit per step; incentivises staying alive without making death preferable to cycling
 
 policy:
   features_dim: 64
