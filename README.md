@@ -52,6 +52,17 @@ Distance-shaping signals (toward/away) are disabled. DQN propagates the value of
 
 ## Model Derivation
 
+| Layer | Technology |
+|---|---|
+| RL algorithm | Stable Baselines3 — DQN (Double DQN) |
+| Policy network | PyTorch (custom MLP) |
+| RL environment | Gymnasium |
+| Game engine | Pure Python (headless) |
+| Rendering | pygame |
+| Experiment tracking | MLflow |
+| Demo app | Streamlit |
+| Testing | pytest + pytest-cov |
+
 **Algorithm — Double DQN**
 
 DQN with a replay buffer is well-suited to this problem. The replay buffer lets rare food-eating transitions be replayed many times, addressing the sparse-reward challenge. The Double DQN target (SB3 default) decouples action selection from value estimation in the Bellman target, reducing Q-value overestimation of safe but suboptimal wandering states.
