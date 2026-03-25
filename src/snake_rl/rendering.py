@@ -40,6 +40,7 @@ class PygameRenderer:
             pygame.display.set_caption("snake-rl")
         self.surface = pygame.Surface((self.screen_w, self.screen_h))
         self.font = pygame.font.SysFont("terminal", 18)
+        self.score_font = pygame.font.SysFont("monospace", 14)
 
     def draw(
         self,
@@ -52,6 +53,7 @@ class PygameRenderer:
         timeout: bool = False,
     ) -> None:
         self._draw_grid(collision, timeout)
+        self._draw_score_on_border(score)
         self._draw_snake(snake)
         self._draw_food(food)
         self._draw_hud(score, episode, step)
@@ -59,9 +61,15 @@ class PygameRenderer:
         pygame.display.update()
 
     def get_rgb_array(
-        self, snake, food, collision: bool = False, timeout: bool = False
+        self,
+        snake,
+        food,
+        collision: bool = False,
+        timeout: bool = False,
+        score: int = 0,
     ) -> np.ndarray:
         self._draw_grid(collision, timeout)
+        self._draw_score_on_border(score)
         self._draw_snake(snake)
         self._draw_food(food)
         self.screen.blit(self.surface, (0, 0))
@@ -112,6 +120,13 @@ class PygameRenderer:
         rect = pygame.Rect(fx * cs, fy * cs, cs, cs)
         pygame.draw.rect(self.surface, FOOD_COLOR, rect)
         pygame.draw.rect(self.surface, BG_COLOR_DARK, rect, 1)
+
+    def _draw_score_on_border(self, score: int) -> None:
+        """Render the score centered in the top border row."""
+        text = self.score_font.render(str(score), True, (20, 20, 20))
+        x = (self.screen_w - text.get_width()) // 2
+        y = (self.cell_size - text.get_height()) // 2
+        self.surface.blit(text, (x, y))
 
     def _draw_hud(self, score: int, episode: int, step: int) -> None:
         cs = self.cell_size

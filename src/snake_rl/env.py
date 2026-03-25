@@ -228,5 +228,5 @@ class SnakeEnv(gym.Env):
     def _get_rgb_array(self) -> np.ndarray:
         renderer = self._get_renderer()
         return renderer.get_rgb_array(
-            self._snake, self._food, self._collision, self._timeout
+            self._snake, self._food, self._collision, self._timeout, self._snake.score
         )

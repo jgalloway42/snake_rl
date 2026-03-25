@@ -134,17 +134,13 @@ def _make_chart_df(data: list[dict], metric_key: str) -> pd.DataFrame | None:
     return pd.DataFrame({"smoothed": smoothed, "raw": series})
 
 
-def _env_from_model(model) -> SnakeEnv:
-    """Construct a SnakeEnv whose grid matches the model's observation space.
+def _env_from_model(_model) -> SnakeEnv:
+    """Construct a SnakeEnv for replay.
 
-    The obs space is flat: (3 * total_h * total_w + 4,).  Since the grid is
-    always square we can recover total_side = sqrt((obs_size - 4) / 3), then
-    playable_size = total_side - 2 (border cells on each side).
+    With the compact 11-feature observation, grid size cannot be recovered
+    from obs_size — use the default 16×16 playable grid from config.
     """
-    obs_size = model.observation_space.shape[0]
-    total_side = int(((obs_size - 4) / 3) ** 0.5)
-    playable = total_side - 2
-    return SnakeEnv(grid_w=playable, grid_h=playable, render_mode="rgb_array")
+    return SnakeEnv(grid_w=16, grid_h=16, render_mode="rgb_array")
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +227,7 @@ with tab_train:
         # Calculation at ~1512 px viewport: left col ≈ 472 px; right col
         # overhead = Training Metrics subheader (~45) + chart row (~190) = 235.
         # Terminal height = 472 - 235 = 237 px → rounded to 240.
-        _TERM_H = 240
+        _TERM_H = 300
         terminal_html = f"""<div id="term" style="
             height:{_TERM_H}px;overflow-y:scroll;background:#1a1d24;
             color:#fafafa;font-family:'Courier New',Courier,monospace;
