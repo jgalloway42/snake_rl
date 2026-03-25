@@ -80,10 +80,15 @@ class MLflowCallback(BaseCallback):
     rather than on rollout end.
     """
 
-    # DQN emits this key into logger.name_to_value during training steps.
+    # SB3 logger keys populated during DQN training steps.
     # Only present after learning_starts has been reached.
     _SB3_KEYS: dict[str, str] = {
         "loss": "train/loss",
+        "learning_rate": "train/learning_rate",
+        "n_updates": "train/n_updates",
+        "episodes": "time/episodes",
+        "fps": "time/fps",
+        "time_elapsed": "time/time_elapsed",
     }
 
     def __init__(

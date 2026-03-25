@@ -190,7 +190,7 @@ with tab_train:
     t_left, t_right = st.columns([1, 2])
 
     with t_left:
-        st.subheader("Live Preview")
+        st.subheader("Live Preview (Current Best Policy)")
         if state is not None and state.latest_frame is not None:
             st.image(state.latest_frame, channels="RGB", width="stretch")
         else:
@@ -214,31 +214,41 @@ with tab_train:
             else:
                 chart_col.markdown("&nbsp;")  # stable placeholder — keeps column height
 
-        st.markdown("**Terminal Output**")
-        log_text = state.get_log_snapshot() if state is not None else ""
-        lines = log_text.splitlines() if log_text else ["No output yet..."]
-        display_text = "\n".join(lines[-200:])
-        import html as _html  # pylint: disable=import-outside-toplevel
+        st.markdown("**Latest Stats**")
+        latest = metrics[-1] if metrics else {}
 
-        # _TERM_H: terminal div height in px.
-        # Tuned so the terminal's bottom aligns with the bottom of the Live
-        # Preview image (square, 18 cells × 20 px/cell = 360 px natural) when
-        # rendered with width="stretch" in a [1,2] column layout.
-        # Calculation at ~1512 px viewport: left col ≈ 472 px; right col
-        # overhead = Training Metrics subheader (~45) + chart row (~190) = 235.
-        # Terminal height = 472 - 235 = 237 px → rounded to 240.
-        _TERM_H = 300
-        terminal_html = f"""<div id="term" style="
-            height:{_TERM_H}px;overflow-y:scroll;background:#1a1d24;
-            color:#fafafa;font-family:'Courier New',Courier,monospace;
-            font-size:12px;padding:8px 10px;box-sizing:border-box;
-            white-space:pre;text-align:left;border-radius:4px;"
-        >{_html.escape(display_text)}</div>
-        <script>
-            var e=document.getElementById('term');
-            if(e)e.scrollTop=e.scrollHeight;
-        </script>"""
-        st.html(terminal_html)
+        def _fmt(val, decimals=4):
+            if val == "—":
+                return val
+            try:
+                f = float(val)
+                return f"{f:.{decimals}f}" if decimals else str(int(f))
+            except (TypeError, ValueError):
+                return str(val)
+
+        stats_rows = [
+            ("rollout/ep_len_mean", _fmt(latest.get("ep_len_mean", "—"), 1)),
+            ("rollout/ep_rew_mean", _fmt(latest.get("ep_rew_mean", "—"), 2)),
+            ("rollout/exploration_rate", _fmt(latest.get("exploration_rate", "—"), 3)),
+            ("time/episodes", _fmt(latest.get("episodes", "—"), 0)),
+            ("time/fps", _fmt(latest.get("fps", "—"), 0)),
+            ("time/time_elapsed", _fmt(latest.get("time_elapsed", "—"), 0)),
+            ("time/total_timesteps", _fmt(latest.get("step", "—"), 0)),
+            ("train/learning_rate", _fmt(latest.get("learning_rate", "—"), 6)),
+            ("train/loss", _fmt(latest.get("loss", "—"), 4)),
+            ("train/n_updates", _fmt(latest.get("n_updates", "—"), 0)),
+        ]
+        rows_html = "".join(
+            f"<tr>"
+            f"<td style='padding:3px 12px;white-space:nowrap;font-size:13px;border:1px solid #555'>{k}</td>"
+            f"<td style='padding:3px 12px;text-align:right;font-size:13px;border:1px solid #555'>{v}</td>"
+            f"</tr>"
+            for k, v in stats_rows
+            if v != "—"
+        )
+        st.html(
+            f"<table style='width:auto;border-collapse:collapse;border:1px solid #555'>{rows_html}</table>"
+        )
 
     st.markdown("---")
 
