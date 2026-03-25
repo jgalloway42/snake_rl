@@ -179,9 +179,12 @@ reward:
   collision: -2.0   # penalty for hitting a wall or the snake's own body
   toward: 0.0       # disabled — DQN handles credit assignment via Q-value propagation
   away: 0.0         # disabled
+  step: -0.05       # per-step cost; prevents cycling (0.0 = disabled)
 ```
 
 With DQN, distance shaping is generally not needed — the Q-function propagates the value of being near food backward through the replay buffer automatically via TD bootstrapping. If you do add shaping, keep it very small relative to `food` reward.
+
+The `step` penalty is applied on every step that is neither a food event nor a collision. Without it, the agent can learn to cycle indefinitely (earning 0 reward per step) rather than risk seeking food. A value of -0.05 makes a 300-step cycle cost -15 total, making food (+16) the only way to come out ahead.
 
 **Swap to a CNN policy**
 
@@ -215,6 +218,7 @@ Training metrics are logged to MLflow every 2048 steps. The Streamlit Train tab 
 | `loss` very high and not decreasing | Reward scale too large (high MSE) | Halve `reward.food` |
 | `ep_len_mean` very short throughout | Agent dies too fast; not exploring | Reduce `collision` penalty magnitude |
 | `ep_rew_mean` spikes then collapses | Target network out of sync | Reduce `target_update_interval` |
+| `ep_rew_mean` low, `ep_len_mean` high, agent visibly cycling | No per-step cost; cycling avoids death at zero reward | Add `reward.step: -0.05` |
 
 **DQN parameter reference:**
 

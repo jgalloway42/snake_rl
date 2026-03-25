@@ -29,6 +29,7 @@ reward:
   collision: -2.0   # 8:1 food:collision ratio; cheap death = more early exploration
   toward: 0.0       # no shaping; food is the only positive signal
   away: 0.0         # no shaping
+  step: -0.05       # per-step cost; prevents cycling by making survival without eating costly
 
 policy:
   features_dim: 64

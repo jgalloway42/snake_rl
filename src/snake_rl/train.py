@@ -363,6 +363,7 @@ def train(
             "collision_penalty": reward_cfg.get("collision", -10.0),
             "toward_reward": reward_cfg.get("toward", 0.1),
             "away_penalty": reward_cfg.get("away", -0.3),
+            "step_penalty": reward_cfg.get("step", 0.0),
         }
         vec_env = make_vec_env(
             SnakeEnv,

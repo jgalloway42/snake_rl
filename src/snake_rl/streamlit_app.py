@@ -218,6 +218,7 @@ with tab_train:
             else:
                 chart_col.markdown("&nbsp;")  # stable placeholder — keeps column height
 
+        st.markdown("**Terminal Output**")
         log_text = state.get_log_snapshot() if state is not None else ""
         lines = log_text.splitlines() if log_text else ["No output yet..."]
         display_text = "\n".join(lines[-200:])

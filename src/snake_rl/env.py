@@ -25,6 +25,7 @@ class SnakeEnv(gym.Env):
         collision_penalty: float = -10.0,
         toward_reward: float = 0.1,
         away_penalty: float = -0.3,
+        step_penalty: float = 0.0,
     ) -> None:
         super().__init__()
         # grid_w/grid_h from config are the *playable* interior dimensions.
@@ -38,6 +39,7 @@ class SnakeEnv(gym.Env):
         self.collision_penalty = collision_penalty
         self.toward_reward = toward_reward
         self.away_penalty = away_penalty
+        self.step_penalty = step_penalty
 
         obs_size = 3 * self.grid_h * self.grid_w + 4
         self.observation_space = spaces.Box(
@@ -108,6 +110,7 @@ class SnakeEnv(gym.Env):
             reward = (
                 self.toward_reward if dist_after < dist_before else self.away_penalty
             )
+            reward += self.step_penalty
 
         if not terminated and self._steps >= self.max_steps:
             truncated = True
