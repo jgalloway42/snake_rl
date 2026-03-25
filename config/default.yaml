@@ -14,7 +14,7 @@ dqn:
   train_freq: 4                 # gradient update every N env steps
   gradient_steps: 1             # gradient updates per train_freq interval
   target_update_interval: 1000  # steps between hard target-network syncs
-  exploration_fraction: 0.3     # fraction of total_timesteps over which epsilon decays
+  exploration_fraction: 0.9     # fraction of total_timesteps over which epsilon decays
   exploration_initial_eps: 1.0  # start fully random
   exploration_final_eps: 0.05   # floor epsilon; keeps a small amount of exploration forever
   heuristic_prefill_steps: 5000 # pre-fill replay buffer with this many heuristic transitions (0 = disabled)
