@@ -1,4 +1,4 @@
-.PHONY: install format lint test check train run clean
+.PHONY: install format lint test check train run gif clean
 
 install:
 	pip install -e ".[dev]"
@@ -19,6 +19,9 @@ train:
 
 run:
 	python -m snake_rl.main --run
+
+gif:
+	SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy python scripts/record_gif.py --out scripts/figures/agent.gif
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
