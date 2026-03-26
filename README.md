@@ -4,6 +4,8 @@
 
 ---
 
+![Agent playing Snake](scripts/figures/agent.gif)
+
 ## Abstract
 
 This project trains a reinforcement learning agent to play the game Snake using Deep Q-Learning (DQN). A custom Gymnasium environment provides a headless, testable game engine. The agent observes a compact 11-feature encoding of game state — danger signals, food direction, and heading — and outputs one of three relative actions. A custom PyTorch MLP serves as the Q-network, integrated with Stable Baselines3. The full experiment pipeline is config-driven, with hyperparameters in YAML and every run tracked in MLflow. After 5 million training steps the agent achieves a mean episode reward of **209.3** and a mean score of **~13** food items per episode.
@@ -91,6 +93,8 @@ The feature extractor produces a 64-dimensional embedding; two hidden layers of 
 ---
 
 ## Results
+
+![Training dashboard](scripts/figures/training_snake_rl.png)
 
 | Metric | Value |
 |---|---|
