@@ -1,0 +1,44 @@
+training:
+  total_timesteps: 5_000_000
+  render_every_n_episodes: 24   # 0 or -1 = fully headless; 1 = every episode
+  n_envs: 1                     # DQN uses a single env with replay buffer
+  save_path: "models/"
+  model_name: "snake_dqn"
+
+dqn:
+  learning_rate: 0.0001         # Adam step size
+  buffer_size: 100000           # replay buffer capacity (transitions); larger = more diverse batches
+  learning_starts: 10000        # random steps collected before first gradient update
+  batch_size: 32                # mini-batch size sampled from replay buffer per update
+  gamma: 0.99                   # discount factor; high value suits long-horizon food-seeking
+  train_freq: 4                 # gradient update every N env steps
+  gradient_steps: 1             # gradient updates per train_freq interval
+  target_update_interval: 1000  # steps between hard target-network syncs
+  exploration_fraction: 0.9     # fraction of total_timesteps over which epsilon decays
+  exploration_initial_eps: 1.0  # start fully random
+  exploration_final_eps: 0.05   # floor epsilon; keeps a small amount of exploration forever
+  heuristic_prefill_steps: 5000 # pre-fill replay buffer with this many heuristic transitions (0 = disabled)
+
+env:
+  grid_w: 16
+  grid_h: 16
+  max_steps: 300
+
+reward:
+  food: 16.0        # scaled down 4× from 64; reduces value-function variance
+  collision: 0.0    # no explicit death penalty; death is implicitly costly via loss of future survival credits
+  toward: 0.0       # no shaping; food is the only positive signal
+  away: 0.0         # no shaping
+  step: 0.01        # survival credit per step; incentivises staying alive without making death preferable to cycling
+
+policy:
+  features_dim: 64
+  hidden_dims: [256, 128]
+
+mlflow:
+  experiment_name: "snake-rl"
+  tracking_uri: "sqlite:///mlruns/mlflow.db"
+
+rendering:
+  snake_body_color: [51, 255, 0]    # RGB for snake body segments
+  snake_head_color: [15, 150, 15]   # RGB for snake head

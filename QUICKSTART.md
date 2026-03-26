@@ -7,13 +7,24 @@ python -m venv .venv && source .venv/bin/activate
 make install
 ```
 
-## Train
+## Play with the pre-trained model
+
+A trained model is included in the repository:
+
+```
+models/snake_dqn.zip         # DQN weights (SB3 format)
+models/snake_dqn_config.yaml # Config snapshot from the training run
+```
+
+Load it in the Streamlit app (**Play** tab) or point `continue_from` at it in the **Train** tab to extend training from this checkpoint.
+
+## Train from scratch
 
 ```bash
 make train
 ```
 
-Trains for 5 million steps by default. All hyperparameters are in `config/default.yaml`. Every run is logged to MLflow — view the experiment at `mlruns/`.
+Trains for 5 million steps by default. All hyperparameters are in `config/default.yaml`. Every run is logged to MLflow — view the experiment at `mlruns/`. A new `models/snake_dqn.zip` is saved on completion.
 
 ## Run the demo app
 
