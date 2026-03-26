@@ -4,7 +4,11 @@
 
 ---
 
+<div align="center">
+
 ![Agent playing Snake](scripts/figures/agent.gif)
+
+</div>
 
 ## Abstract
 
@@ -94,7 +98,11 @@ The feature extractor produces a 64-dimensional embedding; two hidden layers of 
 
 ## Results
 
+<div align="center">
+
 ![Training dashboard](scripts/figures/training_snake_rl.png)
+
+</div>
 
 | Metric | Value |
 |---|---|
